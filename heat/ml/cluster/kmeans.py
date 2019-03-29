@@ -23,19 +23,32 @@ class KMeans:
     def fit(self, data):
         # TODO: document me
         data = data.expand_dims(axis=2)
+        print("(rank{:2d},  data size: ".format(data.comm.rank),  data.shape)
 
         # initialize the centroids randomly
         centroids = self.initialize_centroids(self.n_clusters, data.shape[1], self.random_state, data.device)
+        print("(rank{:2d},  centroid size: ".format(data.comm.rank),  centroids.shape)
         new_centroids = centroids.copy()
 
         for epoch in range(self.max_iter):
             # calculate the distance matrix and determine the closest centroid
             distances = ((data - centroids) ** 2).sum(axis=1)
+            tmp1 = data - centroids
+            tmp2 = tmp1**2
+            tmp3 = tmp2.sum(axis=1)
+            print("(rank{:2d},  Difference size: ".format(data.comm.rank), tmp1.shape)
+            print("(rank{:2d},  squared size: ".format(data.comm.rank), tmp2.shape)
+            print("(rank{:2d},  summed size: ".format(data.comm.rank), tmp3.shape)
+
+            print("(rank{:2d},  distances size: ".format(data.comm.rank), distances.shape)
             matching_centroids = distances.argmin(axis=2)
+            print("(rank{:2d},  matching centroids size: ".format(data.comm.rank), matching_centroids.shape)
 
             # update the centroids
             for i in range(self.n_clusters):
                 selection = (matching_centroids == i).astype(ht.int64)
+                print("(rank{:2d},  selection size: ".format(data.comm.rank), selection.shape)
+
                 new_centroids[:, :, i:i + 1] = ((data * selection).sum(axis=0) /
                                                 selection.sum(axis=0).clip(1.0, sys.maxsize))
 
