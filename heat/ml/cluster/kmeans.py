@@ -1,4 +1,7 @@
 import sys
+import math
+import random
+import numpy as np
 
 import heat as ht
 
@@ -20,34 +23,66 @@ class KMeans:
         ht.random.set_gseed(seed)
         return ht.random.uniform(low=-1.0, high=1.0, size=(1, dimensions, k), device=device)
 
+    @staticmethod
+    def initialize_centroids_databased(k, dimensions, data):
+        # Initialize centroids with random samples from the dataset
+        # Samples will be equally distributed drawn from all involved processes
+        # Each rank draws it samples, stores them into sub_centroids tensor and then distributes them amongst all processes.
+
+        nproc = data.comm.size
+        rank = data.comm.rank
+
+        if data.split == 0:
+
+            if rank < (k % nproc):
+                num_samples = k // nproc + 1
+            else:
+                num_samples = k // nproc
+
+        else:
+            raise NotImplementedError('Not implemented for other splitting-axes')
+
+        local_centroids = ht.empty((num_samples, dimensions))
+
+        for i in range(num_samples):
+            x = random.randint(0, data.lshape[0] - 1)
+            local_centroids._tensor__array[i, :] = data._tensor__array[x, :]
+
+        recv_counts = np.full((nproc,), k // nproc)
+        recv_counts[:k % nproc] += 1
+
+        recv_displs = np.zeros((nproc,), dtype=recv_counts.dtype)
+        np.cumsum(recv_counts[:-1], out=recv_displs[1:])
+
+        gathered = ht.empty((k, data.gshape[1]))
+        print("(Rank: {:2d})  ".format(rank), tuple(recv_counts), tuple(recv_displs))
+
+        data.comm.Allgatherv(local_centroids._tensor__array,
+                             (gathered._tensor__array, tuple(recv_counts), tuple(recv_displs),), recv_axis=0)
+
+        out = ht.transpose(gathered)
+        out = out.expand_dims(axis=0)
+        
+        return out
+
+
+
     def fit(self, data):
         # TODO: document me
         data = data.expand_dims(axis=2)
-        print("(rank{:2d},  data size: ".format(data.comm.rank),  data.shape)
 
         # initialize the centroids randomly
         centroids = self.initialize_centroids(self.n_clusters, data.shape[1], self.random_state, data.device)
-        print("(rank{:2d},  centroid size: ".format(data.comm.rank),  centroids.shape)
         new_centroids = centroids.copy()
 
         for epoch in range(self.max_iter):
             # calculate the distance matrix and determine the closest centroid
             distances = ((data - centroids) ** 2).sum(axis=1)
-            tmp1 = data - centroids
-            tmp2 = tmp1**2
-            tmp3 = tmp2.sum(axis=1)
-            print("(rank{:2d},  Difference size: ".format(data.comm.rank), tmp1.shape)
-            print("(rank{:2d},  squared size: ".format(data.comm.rank), tmp2.shape)
-            print("(rank{:2d},  summed size: ".format(data.comm.rank), tmp3.shape)
-
-            print("(rank{:2d},  distances size: ".format(data.comm.rank), distances.shape)
             matching_centroids = distances.argmin(axis=2)
-            print("(rank{:2d},  matching centroids size: ".format(data.comm.rank), matching_centroids.shape)
 
             # update the centroids
             for i in range(self.n_clusters):
                 selection = (matching_centroids == i).astype(ht.int64)
-                print("(rank{:2d},  selection size: ".format(data.comm.rank), selection.shape)
 
                 new_centroids[:, :, i:i + 1] = ((data * selection).sum(axis=0) /
                                                 selection.sum(axis=0).clip(1.0, sys.maxsize))

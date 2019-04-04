@@ -133,4 +133,3 @@ class TestOperations(unittest.TestCase):
             ht.tan([1, 2, 3])
         with self.assertRaises(TypeError):
             ht.tan('hello world')
-

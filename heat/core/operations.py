@@ -1,7 +1,7 @@
 import itertools
 import torch
 import numpy as np
-
+import warnings
 
 from .communication import MPI
 from . import stride_tricks
@@ -20,6 +20,28 @@ __all__ = [
 ]
 
 
+def mpi_argmin(a, b, _):
+    # left-hand side operand buffer
+    lhs = torch.empty((0,), dtype=torch.double)
+    lhs.set_(torch.DoubleStorage.from_buffer(a, 'native'))
+
+    # right-hand side operand buffer
+    rhs = torch.empty((0,), dtype=torch.double)
+    rhs.set_(torch.DoubleStorage.from_buffer(b, 'native'))
+
+    # extract the values and minimal indices from the buffers (first half are values, second are indices)
+    values = torch.stack((lhs.chunk(2)[0], rhs.chunk(2)[0],), dim=1)
+    indices = torch.stack((lhs.chunk(2)[1], rhs.chunk(2)[1],), dim=1)
+
+    # determine the minimum value and select the indices accordingly
+    min, min_indices = torch.min(values, dim=1)
+    result = torch.cat((min, indices[torch.arange(values.shape[0]), min_indices],))
+
+    # copy the result over into the right-hand side (=output buffer)
+    rhs.storage().copy_(result.storage())
+
+
+MPI_ARGMIN = MPI.Op.Create(mpi_argmin, commute=True)
 
 
 def all(x, axis=None, out=None):
@@ -82,9 +104,10 @@ def all(x, axis=None, out=None):
     return __reduce_op(x, lambda t, *args, **kwargs: t.byte().all(*args, **kwargs), MPI.LAND, axis, out=out)
 
 
-def allclose(x, y, rtol = 1e-05, atol = 1e-08, equal_nan = False):
+def allclose(x, y, rtol=1e-05, atol=1e-08, equal_nan=False):
     """
-    Test whether two tensors are element-wise equal within a tolerance. Returns True if |x - y| <= atol + rtol * |y| for all elements of x and y, False otherwise
+    Test whether two tensors are element-wise equal within a tolerance. Returns True if |x - y| <= atol + rtol * |y|
+    for all elements of x and y, False otherwise
 
     Parameters:
     -----------
@@ -112,17 +135,16 @@ def allclose(x, y, rtol = 1e-05, atol = 1e-08, equal_nan = False):
     Examples:
     ---------
     >>> a = ht.float32([[2, 2], [2, 2]])
-    >>> ht.allclose(a,a)
+    >>> ht.allclose(a, a)
     True
 
-    >>> b = ht.float32([[2.00005,2.00005],[2.00005,2.00005]])
-    >>> ht.allclose(a,b)
+    >>> b = ht.float32([[2.00005,2.00005], [2.00005,2.00005]])
+    >>> ht.allclose(a, b)
     False
-    >>> ht.allclose(a,b, atol=1e-04)
+    >>> ht.allclose(a, b, atol=1e-04)
     True
 
     """
-
     if not isinstance(x, tensor.tensor):
         raise TypeError('Expected x to be a ht.tensor, but was {}'.format(type(x)))
 
@@ -130,6 +152,7 @@ def allclose(x, y, rtol = 1e-05, atol = 1e-08, equal_nan = False):
         raise TypeError('Expected y to be a ht.tensor, but was {}'.format(type(y)))
 
     return torch.allclose(x._tensor__array, y._tensor__array, rtol, atol, equal_nan)
+
 
 def argmin(x, axis=None, out=None):
     """
@@ -165,21 +188,22 @@ def argmin(x, axis=None, out=None):
             [1],
             [2]])
     """
-    axis = stride_tricks.sanitize_axis(x.shape, axis)
+    def local_argmin(*args, **kwargs):
+        minimums, indices = torch.min(*args, **kwargs)
+        if kwargs.get('dim', -1) == x.split:
+            offset, _, _ = x.comm.chunk(x.shape, x.split)
+            indices += offset
 
-    if axis is None:
-        # TEMPORARY SOLUTION! TODO: implementation for axis=None, distributed tensor Issue #100
-        # perform sanitation
-        if not isinstance(x, tensor.tensor):
-            raise TypeError(
-                'expected x to be a ht.tensor, but was {}'.format(type(x)))
+        return torch.cat([minimums.double(), indices.double()])
 
-        out = torch.reshape(torch.argmin(x._tensor__array), (1,))
-        return tensor.tensor(out, out.shape, types.canonical_heat_type(out.dtype), None, x.device, x.comm)
+    # perform the global reduction
+    reduced_result = __reduce_op(x, local_argmin, MPI_ARGMIN, axis, out)
 
-    out = __reduce_op(x, torch.min, MPI.MIN, axis, out=None)._tensor__array[1]
+    # correct the tensor
+    reduced_result._tensor__array = reduced_result._tensor__array.chunk(2)[-1].type(torch.int64)
+    reduced_result._tensor__dtype = types.int64
 
-    return tensor.tensor(out, out.shape, types.canonical_heat_type(out.dtype), x.split, x.device, x.comm)
+    return reduced_result
 
 
 def clip(a, a_min, a_max, out=None):
@@ -234,7 +258,6 @@ def copy(a):
     if not isinstance(a, tensor.tensor):
         raise TypeError('input needs to be a tensor')
     return tensor.tensor(a._tensor__array.clone(), a.shape, a.dtype, a.split, a.device, a.comm)
-
 
 
 def transpose(a, axes=None):
@@ -475,8 +498,8 @@ def __local_operation(operation, x, out):
 
     # do an inplace operation into a provided buffer
     casted = x._tensor__array.type(torch_type)
-    operation(casted.repeat(multiples)
-              if needs_repetition else casted, out=out._tensor__array)
+    operation(casted.repeat(multiples) if needs_repetition else casted, out=out._tensor__array)
+
     return out
 
 
@@ -498,7 +521,7 @@ def __reduce_op(x, partial_op, reduction_op, axis, out):
         partial = partial_op(x._tensor__array).reshape((1,))
         output_shape = (1,)
     else:
-        partial = partial_op(x._tensor__array, axis, keepdim=True)
+        partial = partial_op(x._tensor__array, dim=axis, keepdim=True)
         output_shape = x.gshape[:axis] + (1,) + x.gshape[axis + 1:]
 
     # Check shape of output buffer, if any
@@ -510,7 +533,7 @@ def __reduce_op(x, partial_op, reduction_op, axis, out):
     if x.split is not None and (axis is None or axis == x.split):
         split = None
         if x.comm.is_distributed():
-            x.comm.Allreduce(MPI.IN_PLACE, partial[0], reduction_op)
+            x.comm.Allreduce(MPI.IN_PLACE, partial, reduction_op)
 
     # if reduction_op is a Boolean operation, then resulting tensor is bool
     boolean_ops = [MPI.LAND, MPI.LOR, MPI.BAND, MPI.BOR]
@@ -543,23 +566,21 @@ def __binary_op(operation, t1, t2):
     Parameters
     ----------
     operation : function
-    The operation to be performed. Function that performs operation elements-wise on the involved tensors,
-    e.g. add values from other to self
+        The operation to be performed. Function that performs operation elements-wise on the involved tensors,
+        e.g. add values from other to self
 
     t1: tensor or scalar
-    The first operand involved in the operation,
+        The first operand involved in the operation,
 
     t2: tensor or scalar
-    The second operand involved in the operation,
+        The second operand involved in the operation,
 
     Returns
     -------
     result: ht.tensor
-    A tensor containing the results of element-wise operation.
+        A tensor containing the results of element-wise operation.
     """
-
     if np.isscalar(t1):
-
         try:
             t1 = tensor.array([t1])
         except (ValueError, TypeError,):
@@ -570,45 +591,59 @@ def __binary_op(operation, t1, t2):
                 t2 = tensor.array([t2])
             except (ValueError, TypeError,):
                 raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
-
             output_shape = (1,)
             output_split = None
             output_device = None
             output_comm = None
-
         elif isinstance(t2, tensor.tensor):
             output_shape = t2.shape
             output_split = t2.split
             output_device = t2.device
             output_comm = t2.comm
-
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
 
         if t1.dtype != t2.dtype:
             t1 = t1.astype(t2.dtype)
 
-
     elif isinstance(t1, tensor.tensor):
-
         if np.isscalar(t2):
             try:
                 t2 = tensor.array([t2])
+                output_shape = t1.shape
+                output_split = t1.split
+                output_device = t1.device
+                output_comm = t1.comm
             except (ValueError, TypeError,):
                 raise TypeError('Data type not supported, input was {}'.format(type(t2)))
 
         elif isinstance(t2, tensor.tensor):
 
-            output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
-
             # TODO: implement complex NUMPY rules
             if t2.split is None or t2.split == t1.split:
-                pass
-
+                output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
+                output_split = t1.split
+                output_device = t1.device
+                output_comm = t1.comm
             else:
-                # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0 and split=1
+                # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0
+                # and split=1
                 raise NotImplementedError('Not implemented for other splittings')
 
+            # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data. 
+            if t1.split is not None:
+                if t1.shape[t1.split] == 1 and t1.comm.is_distributed():
+                    warnings.warn('Broadcasting requires transfering data of first operator between MPI ranks!')
+                    if t1.comm.rank > 0:
+                        t1._tensor__array = torch.zeros(t1.shape, dtype=t1.dtype.torch_type())
+                    t1.comm.Bcast(t1)
+
+            if t2.split is not None:
+                if t2.shape[t2.split] == 1 and t2.comm.is_distributed():
+                    warnings.warn('Broadcasting requires transfering data of second operator between MPI ranks!')
+                    if t2.comm.rank > 0:
+                        t2._tensor__array = torch.zeros(t2.shape, dtype=t2.dtype.torch_type())
+                    t2.comm.Bcast(t2)            
 
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
@@ -616,16 +651,22 @@ def __binary_op(operation, t1, t2):
         if t2.dtype != t1.dtype:
             t2 = t2.astype(t1.dtype)
 
-        output_shape = t1.shape
-        output_split = t1.split
-        output_device = t1.device
-        output_comm = t1.comm
-
 
     else:
         raise NotImplementedError('Not implemented for non scalar')
 
-    result = operation(t1._tensor__array, t2._tensor__array)
+    if t1.split is not None:
+        if t1.lshape[t1.split] == 0:
+            result = t1
+        else:
+            result = operation(t1._tensor__array, t2._tensor__array)
+    elif t1.split is not None:
+        if t2.lshape[t2.split] == 0:
+            result = t2
+        else: 
+            result = operation(t1._tensor__array, t2._tensor__array)
+    else:
+        result = operation(t1._tensor__array, t2._tensor__array)
 
     return tensor.tensor(result, output_shape, t1.dtype, output_split, output_device, output_comm)
 
