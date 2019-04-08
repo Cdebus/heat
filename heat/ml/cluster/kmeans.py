@@ -72,7 +72,7 @@ class KMeans:
         data = data.expand_dims(axis=2)
 
         # initialize the centroids randomly
-        centroids = self.initialize_centroids(self.n_clusters, data.shape[1], self.random_state, data.device)
+        centroids = self.initialize_centroids_databased(self.n_clusters, data.shape[1], data)
         new_centroids = centroids.copy()
 
         for epoch in range(self.max_iter):
