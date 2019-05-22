@@ -85,30 +85,20 @@ def __binary_op(operation, t1, t2):
             if t2.dtype != t1.dtype:
                 t2 = t2.astype(t1.dtype)
 
+
             # TODO: implement complex NUMPY rules
             if t2.split == t1.split:
                 pass
             elif (t1.split is not None) and (t2.split is None):
-                if t2.shape[t1.split] == 1:
-                    warnings.warn('Broadcasting requires transferring data of second operator between MPI ranks!')
-                    t2.comm.Bcast(t2)
                 t2.resplit(axis=t1.split)
 
             elif (t2.split is not None) and (t1.split is None):
-                if t1.shape[t2.split] == 1:
-                    warnings.warn('Broadcasting requires transferring data of first operator between MPI ranks!')
-                    t1.comm.Bcast(t1)
                 t1.resplit(axis=t2.split)
 
             else:
                 # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0
                 # and split=1
                 raise NotImplementedError('Not implemented for other splittings')
-
-            output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
-            output_split = t1.split
-            output_device = t1.device
-            output_comm = t1.comm
 
             # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data.
             if t1.split is not None:
@@ -124,6 +114,12 @@ def __binary_op(operation, t1, t2):
                     if t2.comm.rank > 0:
                         t2._DNDarray__array = torch.zeros(t2.shape, dtype=t2.dtype.torch_type())
                     t2.comm.Bcast(t2)
+
+            output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
+            output_split = t1.split
+            output_device = t1.device
+            output_comm = t1.comm
+
 
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))

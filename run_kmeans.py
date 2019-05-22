@@ -7,6 +7,7 @@ def main():
     k = 3
     kmeans = ht.ml.cluster.KMeans(n_clusters=k)
     centroids = kmeans.fit(data)
+    print("FINAL CENTROIDS: ", centroids)
 
 
 

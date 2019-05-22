@@ -32,8 +32,7 @@ class KMeans:
         nproc = data.comm.size
         rank = data.comm.rank
 
-        if data.split == 0:
-
+        if (data.split == None) or (data.split == 0):
             if rank < (k % nproc):
                 num_samples = k // nproc + 1
             else:
@@ -43,10 +42,10 @@ class KMeans:
             raise NotImplementedError('Not implemented for other splitting-axes')
 
         local_centroids = ht.empty((num_samples, dimensions))
-
         for i in range(num_samples):
             x = random.randint(0, data.lshape[0] - 1)
-            local_centroids._tensor__array[i, :] = data._tensor__array[x, :]
+            local_centroids[i, :] = data.lloc[x, :, 0]
+
 
         recv_counts = np.full((nproc,), k // nproc)
         recv_counts[:k % nproc] += 1
@@ -55,13 +54,14 @@ class KMeans:
         np.cumsum(recv_counts[:-1], out=recv_displs[1:])
 
         gathered = ht.empty((k, data.gshape[1]))
-        print("(Rank: {:2d})  ".format(rank), tuple(recv_counts), tuple(recv_displs))
 
-        data.comm.Allgatherv(local_centroids._tensor__array,
-                             (gathered._tensor__array, tuple(recv_counts), tuple(recv_displs),), recv_axis=0)
+        data.comm.Allgatherv(local_centroids._DNDarray__array,
+                             (gathered._DNDarray__array, tuple(recv_counts), tuple(recv_displs),), recv_axis=0)
 
         out = ht.transpose(gathered)
         out = out.expand_dims(axis=0)
+        print("Centroids: ", out)
+
         
         return out
 
