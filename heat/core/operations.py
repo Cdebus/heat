@@ -83,19 +83,21 @@ def __binary_op(operation, t1, t2):
 
             output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
 
+
             # TODO: implement complex NUMPY rules
             if t2.split == t1.split:
                 pass
             elif (t1.split is not None) and (t2.split is None):
-                t2.resplit(axis=t1.split)
-            elif (t2.split is not None) and (t1.split is None):
-                t1.resplit(axis=t2.split)
+                pass
+                #t2.resplit(axis=t1.split)
+            #elif (t2.split is not None) and (t1.split is None):
+            #    t1.resplit(axis=t2.split)
             else:
                 # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0
                 # and split=1
                 raise NotImplementedError('Not implemented for other splittings')
 
-            # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data.
+             # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data.
             if t1.split is not None:
                 if t1.shape[t1.split] == 1 and t1.comm.is_distributed():
                     warnings.warn('Broadcasting requires transferring data of first operator between MPI ranks!')
