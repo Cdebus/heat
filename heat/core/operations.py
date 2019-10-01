@@ -36,41 +36,64 @@ def __binary_op(operation, t1, t2):
     """
 
     if np.isscalar(t1):
-        try:
-            t1 = factories.array([t1])
-        except (ValueError, TypeError,):
-            raise TypeError('Data type not supported, input was {}'.format(type(t1)))
-
         if np.isscalar(t2):
             try:
-                t2 = factories.array([t2])
-            except (ValueError, TypeError,):
-                raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+                result = operation(t1, t2)
+            except TypeError:
+                try:
+                    t1_tensor = factories.array([t1])
+                    result = operation(t1_tensor._DNDarray__array, t2)
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
             output_shape = (1,)
+            output_type = types.canonical_heat_type(result.dtype)
             output_split = None
             output_device = None
             output_comm = MPI_WORLD
+
         elif isinstance(t2, dndarray.DNDarray):
+            promoted_type = types.promote_types(type(t1), t2.dtype).torch_type()
+            try:
+                result = operation(t1, t2._DNDarray__array(promoted_type))
+                output_type = types.canonical_heat_type(result.dtype)
+            except TypeError:
+                try:
+                    t1_tensor = factories.array([t1])
+                    result = operation(t1_tensor._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+                    output_type = types.canonical_heat_type(promoted_type)
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+
             output_shape = t2.shape
+            output_type = types.canonical_heat_type(result.dtype)
             output_split = t2.split
             output_device = t2.device
             output_comm = t2.comm
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
 
-        if t1.dtype != t2.dtype:
-            t1 = t1.astype(t2.dtype)
 
     elif isinstance(t1, dndarray.DNDarray):
         if np.isscalar(t2):
+            promoted_type = types.promote_types(t1.dtype, type(t2)).torch_type()
+
             try:
-                t2 = factories.array([t2])
-                output_shape = t1.shape
-                output_split = t1.split
-                output_device = t1.device
-                output_comm = t1.comm
-            except (ValueError, TypeError,):
-                raise TypeError('Data type not supported, input was {}'.format(type(t2)))
+                result = operation(t1._DNDarray__array(promoted_type), t2)
+                output_type = types.canonical_heat_type(result.dtype)
+
+            except TypeError:
+                try:
+                    t2_tensor = factories.array([t2])
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2_tensor._DNDarray__array.type(promoted_type))
+                    output_type = types.canonical_heat_type(promoted_type)
+
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+
+            output_shape = t1.shape
+            output_split = t1.split
+            output_device = t1.device
+            output_comm = t1.comm
 
         elif isinstance(t2, dndarray.DNDarray):
             if t1.split is None:
@@ -102,31 +125,34 @@ def __binary_op(operation, t1, t2):
                         t2._DNDarray__array = torch.zeros(t2.shape, dtype=t2.dtype.torch_type())
                     t2.comm.Bcast(t2)
 
+
+            promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
+            #print("t1={} , t2= {}".format(t1, t2))
+            #print("t1.dtype = {}, t2.dtype = {}, promoted type = {}".format( t1.dtype, t2.dtype, promoted_type))
+            if t1.split is not None:
+                if len(t1.lshape) > t1.split and t1.lshape[t1.split] == 0:
+                    result = t1._DNDarray__array.type(promoted_type)
+                else:
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+            elif t2.split is not None:
+
+                if len(t2.lshape) > t2.split and t2.lshape[t2.split] == 0:
+                    result = t2._DNDarray__array.type(promoted_type)
+                else:
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+            else:
+                result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+
+            output_type = types.canonical_heat_type(promoted_type)
+
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
-
-        if t2.dtype != t1.dtype:
-            t2 = t2.astype(t1.dtype)
 
     else:
         raise NotImplementedError('Not implemented for non scalar')
 
-    promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
-    if t1.split is not None:
-        if len(t1.lshape) > t1.split and t1.lshape[t1.split] == 0:
-            result = t1._DNDarray__array.type(promoted_type)
-        else:
-            result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-    elif t2.split is not None:
 
-        if len(t2.lshape) > t2.split and t2.lshape[t2.split] == 0:
-            result = t2._DNDarray__array.type(promoted_type)
-        else:
-            result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-    else:
-        result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-
-    return dndarray.DNDarray(result, output_shape, types.canonical_heat_type(t1.dtype), output_split, output_device, output_comm)
+    return dndarray.DNDarray(result, output_shape, output_type, output_split, output_device, output_comm)
 
 
 def __local_op(operation, x, out, no_cast=False, **kwargs):
