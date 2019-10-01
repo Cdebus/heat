@@ -5,6 +5,7 @@ import warnings
 
 from .communication import MPI, MPI_WORLD
 from . import factories
+from . import manipulations
 from . import stride_tricks
 from . import dndarray
 from . import types
@@ -41,8 +42,8 @@ def __binary_op(operation, t1, t2):
                 result = operation(t1, t2)
             except TypeError:
                 try:
-                    t1_tensor = factories.array([t1])
-                    result = operation(t1_tensor._DNDarray__array, t2)
+                    t1 = factories.array(t1)
+                    result = operation(t1._DNDarray__array, t2)
                 except (ValueError, TypeError,):
                     raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
             output_shape = (1,)
@@ -50,7 +51,6 @@ def __binary_op(operation, t1, t2):
             output_split = None
             output_device = None
             output_comm = MPI_WORLD
-
         elif isinstance(t2, dndarray.DNDarray):
             promoted_type = types.promote_types(type(t1), t2.dtype).torch_type()
             try:
@@ -58,8 +58,8 @@ def __binary_op(operation, t1, t2):
                 output_type = types.canonical_heat_type(result.dtype)
             except TypeError:
                 try:
-                    t1_tensor = factories.array([t1])
-                    result = operation(t1_tensor._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+                    t1 = factories.array(t1)
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
                     output_type = types.canonical_heat_type(promoted_type)
                 except (ValueError, TypeError,):
                     raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
@@ -83,8 +83,8 @@ def __binary_op(operation, t1, t2):
 
             except TypeError:
                 try:
-                    t2_tensor = factories.array([t2])
-                    result = operation(t1._DNDarray__array.type(promoted_type), t2_tensor._DNDarray__array.type(promoted_type))
+                    t2 = factories.array(t2)
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
                     output_type = types.canonical_heat_type(promoted_type)
 
                 except (ValueError, TypeError,):
@@ -96,18 +96,28 @@ def __binary_op(operation, t1, t2):
             output_comm = t1.comm
 
         elif isinstance(t2, dndarray.DNDarray):
-            if t1.split is None:
-                t1 = factories.array(t1, split=t2.split, copy=False, comm=t1.comm, device=t1.device, ndmin=-t2.numdims)
-            elif t2.split is None:
-                t2 = factories.array(t2, split=t1.split, copy=False, comm=t2.comm, device=t2.device, ndmin=-t1.numdims)
-            elif t1.split != t2.split:
-                # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0
-                # and split=1
-                raise NotImplementedError('Not implemented for other splittings')
-
             output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
-            output_split = t1.split
             output_device = t1.device
+            promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
+
+            if t2.split != t1.split:
+                if (t1.comm != t2.comm):
+                    raise NotImplementedError(
+                        'Communication Error : T1 and T2 have differing communications. Go see a therapist.')
+
+                if (t2.split is None):
+                    t2 = manipulations.resplit(t2, axis=t1.split)
+                elif (t1.split is None):
+                    t1 = manipulations.resplit(t1, axis=t2.split)
+                else:
+                    if(t1.size > t2.size) or (t1.size == t2.size and t1.split > t2.split):
+                        t2 = manipulations.resplit(t2, axis=t1.split)
+                    elif (t1.size < t2.size) or (t1.size == t2.size and t1.split < t2.split):
+                        t1 = manipulations.resplit(t1, axis=t2.split)
+                    else:
+                        raise NotImplementedError('Communication Error : Weird split combination, I dont know what to do')
+
+            output_split = t1.split
             output_comm = t1.comm
 
             # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data.
@@ -125,17 +135,12 @@ def __binary_op(operation, t1, t2):
                         t2._DNDarray__array = torch.zeros(t2.shape, dtype=t2.dtype.torch_type())
                     t2.comm.Bcast(t2)
 
-
-            promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
-            #print("t1={} , t2= {}".format(t1, t2))
-            #print("t1.dtype = {}, t2.dtype = {}, promoted type = {}".format( t1.dtype, t2.dtype, promoted_type))
             if t1.split is not None:
                 if len(t1.lshape) > t1.split and t1.lshape[t1.split] == 0:
                     result = t1._DNDarray__array.type(promoted_type)
                 else:
                     result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
             elif t2.split is not None:
-
                 if len(t2.lshape) > t2.split and t2.lshape[t2.split] == 0:
                     result = t2._DNDarray__array.type(promoted_type)
                 else:

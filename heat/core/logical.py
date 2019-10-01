@@ -6,6 +6,7 @@ from . import factories
 from . import manipulations
 from . import operations
 from . import dndarray
+from . import types
 
 __all__ = [
     'all',
@@ -146,7 +147,8 @@ def allclose(x, y, rtol=1e-05, atol=1e-08, equal_nan=False):
         t2 = y.copy()
 
     # no sanitation for shapes of x and y needed, torch.allclose raises relevant errors
-    _local_allclose = torch.tensor(torch.allclose(t1._DNDarray__array, t2._DNDarray__array, rtol, atol, equal_nan))
+    promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
+    _local_allclose = torch.tensor(torch.allclose(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type), rtol, atol, equal_nan))
 
     # If x is distributed, then y is also distributed along the same axis
     if t1.comm.is_distributed():
