@@ -190,7 +190,7 @@ def matmul(a, b):
             c += a._DNDarray__array @ b._DNDarray__array[a_idx[1].start:a_idx[1].start + a.lshape[-1], :]
             a.comm.Allreduce(MPI.IN_PLACE, c, MPI.SUM)
             c = c if not vector_flag else c.squeeze()
-            c = factories.array(c, split=a.split if b.gshape[1] > 1 else 0)
+            c = factories.array(c, split=a.split if b.gshape[1] > 1 else None)
             return c
 
         elif a.split is None and b.split == 0:
