@@ -33,7 +33,7 @@ class TestArithmetics(unittest.TestCase):
             [3.0, 4.0],
             [5.0, 6.0]
         ])
-        self.assertTrue(ht.equal(ht.add(self.a_scalar, self.a_scalar), ht.array(4.0)))
+        self.assertTrue(ht.equal(ht.add(self.a_scalar, self.a_scalar), ht.array(4.0, dtype=ht.float64)))
         self.assertTrue(ht.equal(ht.add(self.a_tensor, self.a_scalar), result))
         self.assertTrue(ht.equal(ht.add(self.a_scalar, self.a_tensor), result))
         self.assertTrue(ht.equal(ht.add(self.a_tensor, self.another_tensor), result))

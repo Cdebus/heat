@@ -42,7 +42,7 @@ def __binary_op(operation, t1, t2):
                     result = operation(t1._DNDarray__array, t2)
                 except (ValueError, TypeError,):
                     raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
-            output_shape = (1,)
+            output_shape = result.shape
             output_type = types.canonical_heat_type(result.dtype)
             output_split = None
             output_device = None
@@ -99,6 +99,8 @@ def __binary_op(operation, t1, t2):
             if len(t1.shape)<len(t2.shape):
                 for i in range(len(t1.shape), len(t2.shape)): t1 = t1.expand_dims(i)
             if len(t2.shape)<len(t1.shape):
+                temp = len(t2.shape)
+                temp2 = len(t1.shape)
                 for i in range(len(t2.shape), len(t1.shape)): t2 = t2.expand_dims(i)
 
             if t2.split != t1.split:

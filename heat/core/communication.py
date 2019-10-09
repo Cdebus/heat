@@ -640,24 +640,35 @@ class MPICommunication(Communication):
 
         #  send and receive buffer need custom datatype preparation;
         # operation is performed via alltoallw
-        if (recv_axis == send_axis):
-            raise NotImplementedError(
-                'AllToAll for same axes not supported. Please choose send_axis and recv_axis to be different.')
-
         # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
-        axis_permutation = list(range(recvbuf.ndimension()))
-        if(send_axis == 0):
-            axis_permutation[1], axis_permutation[send_axis] = send_axis, 1
-            axis_permutation[recv_axis] = axis_permutation[0]
-            axis_permutation[0] = recv_axis
+
+        if (send_axis < 2 and recv_axis < 2) or (send_axis == recv_axis):
+            send_axis_permutation = list(range(recvbuf.ndimension()))
+            recv_axis_permutation = list(range(recvbuf.ndimension()))
+
+            # Minimal Fix; Could possibly be improved when reworking counts, displs algorithmics
+            if (self.size > 1):
+                send_axis_permutation[0], send_axis_permutation[send_axis] = send_axis, 0
+                recv_axis_permutation[0], recv_axis_permutation[recv_axis] = recv_axis, 0
+
+
+            sendbuf = sendbuf.permute(*send_axis_permutation)
+            recvbuf = recvbuf.permute(*recv_axis_permutation)
 
         else:
-            axis_permutation[0], axis_permutation[recv_axis] = recv_axis, 0
-            axis_permutation[send_axis] = axis_permutation[1]
-            axis_permutation[1] = send_axis
+            axis_permutation = list(range(recvbuf.ndimension()))
+            if (send_axis == 0):
+                axis_permutation[1], axis_permutation[send_axis] = send_axis, 1
+                axis_permutation[recv_axis] = axis_permutation[0]
+                axis_permutation[0] = recv_axis
 
-        sendbuf = sendbuf.permute(*axis_permutation)
-        recvbuf = recvbuf.permute(*axis_permutation)
+            else:
+                axis_permutation[0], axis_permutation[recv_axis] = recv_axis, 0
+                axis_permutation[send_axis] = axis_permutation[1]
+                axis_permutation[1] = send_axis
+
+            sendbuf = sendbuf.permute(*axis_permutation)
+            recvbuf = recvbuf.permute(*axis_permutation)
 
         # prepare buffer objects
         mpi_sendbuf = self.alltoall_sendbuffer(sendbuf)
