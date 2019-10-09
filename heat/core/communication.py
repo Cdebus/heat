@@ -642,8 +642,7 @@ class MPICommunication(Communication):
         # operation is performed via alltoallw
         # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
 
-        #if (send_axis == recv_axis):
-         #   pass
+
         if (send_axis < 2 and recv_axis < 2):
             send_axis_permutation = list(range(recvbuf.ndimension()))
             recv_axis_permutation = list(range(recvbuf.ndimension()))
@@ -652,6 +651,7 @@ class MPICommunication(Communication):
             if (self.size > 1):
                 send_axis_permutation[0], send_axis_permutation[send_axis] = send_axis, 0
                 recv_axis_permutation[0], recv_axis_permutation[recv_axis] = recv_axis, 0
+
 
 
             sendbuf = sendbuf.permute(*send_axis_permutation)

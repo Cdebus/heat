@@ -11,7 +11,7 @@ class TestRelational(unittest.TestCase):
 
         cls.a_vector = ht.float32([2, 2])
         cls.another_vector = ht.float32([2, 2, 2])
-        
+
         cls.a_tensor = ht.array([
             [1.0, 2.0],
             [3.0, 4.0]
@@ -44,22 +44,13 @@ class TestRelational(unittest.TestCase):
         with self.assertRaises(TypeError):
             ht.eq(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
-            ht.eq('2', self.a_vector)
-        with self.assertRaises(TypeError):
             ht.eq('self.a_tensor', 's')
 
     def test_equal(self):
-        self.assertTrue(ht.equal(self.a_scalar, 2.0))
         self.assertTrue(ht.equal(self.a_tensor, self.a_tensor))
         self.assertFalse(ht.equal(self.a_tensor, self.another_tensor))
         self.assertFalse(ht.equal(self.a_tensor, self.a_scalar))
         self.assertFalse(ht.equal(self.another_tensor, self.a_scalar))
-
-        with self.assertRaises(TypeError):
-            ht.equal('2', self.a_scalar)
-        with self.assertRaises(TypeError):
-            ht.equal(self.a_scalar, '2')
-
 
     def test_ge(self):
         result = ht.uint8([
@@ -85,8 +76,6 @@ class TestRelational(unittest.TestCase):
             ht.ge(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
             ht.ge('self.a_tensor', 's')
-        with self.assertRaises(TypeError):
-            ht.ge('2', self.a_vector)
 
     def test_gt(self):
         result = ht.uint8([
@@ -112,8 +101,6 @@ class TestRelational(unittest.TestCase):
             ht.gt(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
             ht.gt('self.a_tensor', 's')
-        with self.assertRaises(TypeError):
-            ht.gt('2', self.a_vector)
 
     def test_le(self):
         result = ht.uint8([
@@ -139,8 +126,6 @@ class TestRelational(unittest.TestCase):
             ht.le(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
             ht.le('self.a_tensor', 's')
-        with self.assertRaises(TypeError):
-            ht.le('2', self.a_vector)
 
     def test_lt(self):
         result = ht.uint8([
@@ -166,8 +151,6 @@ class TestRelational(unittest.TestCase):
             ht.lt(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
             ht.lt('self.a_tensor', 's')
-        with self.assertRaises(TypeError):
-            ht.lt('2', self.a_vector)
 
     def test_ne(self):
         result = ht.uint8([
@@ -190,5 +173,3 @@ class TestRelational(unittest.TestCase):
             ht.ne(self.a_tensor, self.errorneous_type)
         with self.assertRaises(TypeError):
             ht.ne('self.a_tensor', 's')
-        with self.assertRaises(TypeError):
-            ht.ne('2', self.a_vector)
