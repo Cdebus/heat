@@ -100,13 +100,7 @@ def __binary_op(operation, t1, t2):
             output_device = t1.device
             promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
 
-            if len(t1.shape)<len(t2.shape):
-                for i in range(len(t1.shape), len(t2.shape)): t1 = t1.expand_dims(i)
-            if len(t2.shape)<len(t1.shape):
-                temp = len(t2.shape)
-                temp2 = len(t1.shape)
-                for i in range(len(t2.shape), len(t1.shape)): t2 = t2.expand_dims(i)
-
+ 
             if t2.split != t1.split:
                 if (t1.comm != t2.comm):
                     raise NotImplementedError(
