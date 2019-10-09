@@ -5,6 +5,7 @@ import warnings
 
 from .communication import MPI, MPI_WORLD
 from . import factories
+from . import manipulations
 from . import stride_tricks
 from . import dndarray
 from . import types
@@ -16,19 +17,15 @@ def __binary_op(operation, t1, t2):
     """
     Generic wrapper for element-wise binary operations of two operands (either can be tensor or scalar).
     Takes the operation function and the two operands involved in the operation as arguments.
-
     Parameters
     ----------
     operation : function
         The operation to be performed. Function that performs operation elements-wise on the involved tensors,
         e.g. add values from other to self
-
     t1: dndarray or scalar
         The first operand involved in the operation,
-
     t2: tensor or scalar
         The second operand involved in the operation,
-
     Returns
     -------
     result: ht.DNDarray
@@ -36,55 +33,93 @@ def __binary_op(operation, t1, t2):
     """
 
     if np.isscalar(t1):
-        try:
-            t1 = factories.array([t1])
-        except (ValueError, TypeError,):
-            raise TypeError('Data type not supported, input was {}'.format(type(t1)))
-
         if np.isscalar(t2):
             try:
-                t2 = factories.array([t2])
-            except (ValueError, TypeError,):
-                raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+                result = operation(t1, t2)
+            except TypeError:
+                try:
+                    t1 = factories.array(t1)
+                    result = operation(t1._DNDarray__array, t2)
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
             output_shape = (1,)
+            output_type = types.canonical_heat_type(result.dtype)
             output_split = None
             output_device = None
             output_comm = MPI_WORLD
         elif isinstance(t2, dndarray.DNDarray):
+            promoted_type = types.promote_types(type(t1), t2.dtype).torch_type()
+            try:
+                result = operation(t1, t2._DNDarray__array(promoted_type))
+                output_type = types.canonical_heat_type(result.dtype)
+            except TypeError:
+                try:
+                    t1 = factories.array(t1)
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+                    output_type = types.canonical_heat_type(promoted_type)
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+
             output_shape = t2.shape
+            output_type = types.canonical_heat_type(result.dtype)
             output_split = t2.split
             output_device = t2.device
             output_comm = t2.comm
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
 
-        if t1.dtype != t2.dtype:
-            t1 = t1.astype(t2.dtype)
 
     elif isinstance(t1, dndarray.DNDarray):
         if np.isscalar(t2):
+            promoted_type = types.promote_types(t1.dtype, type(t2)).torch_type()
+
             try:
-                t2 = factories.array([t2])
-                output_shape = t1.shape
-                output_split = t1.split
-                output_device = t1.device
-                output_comm = t1.comm
-            except (ValueError, TypeError,):
-                raise TypeError('Data type not supported, input was {}'.format(type(t2)))
+                result = operation(t1._DNDarray__array(promoted_type), t2)
+                output_type = types.canonical_heat_type(result.dtype)
 
-        elif isinstance(t2, dndarray.DNDarray):
-            if t1.split is None:
-                t1 = factories.array(t1, split=t2.split, copy=False, comm=t1.comm, device=t1.device, ndmin=-t2.numdims)
-            elif t2.split is None:
-                t2 = factories.array(t2, split=t1.split, copy=False, comm=t2.comm, device=t2.device, ndmin=-t1.numdims)
-            elif t1.split != t2.split:
-                # It is NOT possible to perform binary operations on tensors with different splits, e.g. split=0
-                # and split=1
-                raise NotImplementedError('Not implemented for other splittings')
+            except TypeError:
+                try:
+                    t2 = factories.array(t2)
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+                    output_type = types.canonical_heat_type(promoted_type)
 
-            output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
+                except (ValueError, TypeError,):
+                    raise TypeError('Only numeric scalars are supported, but input was {}'.format(type(t2)))
+
+            output_shape = t1.shape
             output_split = t1.split
             output_device = t1.device
+            output_comm = t1.comm
+
+        elif isinstance(t2, dndarray.DNDarray):
+            output_shape = stride_tricks.broadcast_shape(t1.shape, t2.shape)
+            output_device = t1.device
+            promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
+
+            if len(t1.shape)<len(t2.shape):
+                for i in range(len(t1.shape), len(t2.shape)): t1 = t1.expand_dims(i)
+            if len(t2.shape)<len(t1.shape):
+                for i in range(len(t2.shape), len(t1.shape)): t2 = t2.expand_dims(i)
+
+            if t2.split != t1.split:
+                if (t1.comm != t2.comm):
+                    raise NotImplementedError(
+                        'Communication Error : T1 and T2 have differing communications. Go see a therapist.')
+
+
+                if (t2.split is None):
+                    t2 = manipulations.resplit(t2, axis=t1.split)
+                elif (t1.split is None):
+                    t1 = manipulations.resplit(t1, axis=t2.split)
+                else:
+                    if(t1.size > t2.size) or (t1.size == t2.size and t1.split > t2.split):
+                        t2 = manipulations.resplit(t2, axis=t1.split)
+                    elif (t1.size < t2.size) or (t1.size == t2.size and t1.split < t2.split):
+                        t1 = manipulations.resplit(t1, axis=t2.split)
+                    else:
+                        raise NotImplementedError('Communication Error : Weird split combination, I dont know what to do')
+
+            output_split = t1.split
             output_comm = t1.comm
 
             # ToDo: Fine tuning in case of comm.size>t1.shape[t1.split]. Send torch tensors only to ranks, that will hold data.
@@ -102,31 +137,29 @@ def __binary_op(operation, t1, t2):
                         t2._DNDarray__array = torch.zeros(t2.shape, dtype=t2.dtype.torch_type())
                     t2.comm.Bcast(t2)
 
+            if t1.split is not None:
+                if len(t1.lshape) > t1.split and t1.lshape[t1.split] == 0:
+                    result = t1._DNDarray__array.type(promoted_type)
+                else:
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+            elif t2.split is not None:
+                if len(t2.lshape) > t2.split and t2.lshape[t2.split] == 0:
+                    result = t2._DNDarray__array.type(promoted_type)
+                else:
+                    result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+            else:
+                result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
+
+            output_type = types.canonical_heat_type(promoted_type)
+
         else:
             raise TypeError('Only tensors and numeric scalars are supported, but input was {}'.format(type(t2)))
-
-        if t2.dtype != t1.dtype:
-            t2 = t2.astype(t1.dtype)
 
     else:
         raise NotImplementedError('Not implemented for non scalar')
 
-    promoted_type = types.promote_types(t1.dtype, t2.dtype).torch_type()
-    if t1.split is not None:
-        if len(t1.lshape) > t1.split and t1.lshape[t1.split] == 0:
-            result = t1._DNDarray__array.type(promoted_type)
-        else:
-            result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-    elif t2.split is not None:
 
-        if len(t2.lshape) > t2.split and t2.lshape[t2.split] == 0:
-            result = t2._DNDarray__array.type(promoted_type)
-        else:
-            result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-    else:
-        result = operation(t1._DNDarray__array.type(promoted_type), t2._DNDarray__array.type(promoted_type))
-
-    return dndarray.DNDarray(result, output_shape, types.canonical_heat_type(t1.dtype), output_split, output_device, output_comm)
+    return dndarray.DNDarray(result, output_shape, output_type, output_split, output_device, output_comm)
 
 
 def __local_op(operation, x, out, no_cast=False, **kwargs):
@@ -134,7 +167,6 @@ def __local_op(operation, x, out, no_cast=False, **kwargs):
     Generic wrapper for local operations, which do not require communication. Accepts the actual operation function as
     argument and takes only care of buffer allocation/writing. This function is intended to work on an element-wise bases
     WARNING: the gshape of the result will be the same as x
-
     Parameters
     ----------
     operation : function
@@ -146,13 +178,11 @@ def __local_op(operation, x, out, no_cast=False, **kwargs):
     out : ht.DNDarray or None
         A location in which to store the results. If provided, it must have a broadcastable shape. If not provided or
         set to None, a fresh tensor is allocated.
-
     Returns
     -------
     result : ht.DNDarray
         A tensor of the same shape as x, containing the result of 'operation' for each element in x. If out was
         provided, result is a reference to it.
-
     Raises
     -------
     TypeError

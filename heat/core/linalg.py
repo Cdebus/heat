@@ -159,12 +159,17 @@ def matmul(a, b):
     else:
         # if they are vectors they need to be expanded to be the proper dimensions
         vector_flag = False  # flag to run squeeze at the end of the function
+        vector_flag = False  # flag to run squeeze at the end of the function
+        both_vec = 0
         if len(a.gshape) < 2:
             a = manipulations.expand_dims(a, axis=0)
             vector_flag = True
+            both_vec += 1
         if len(b.gshape) < 2:
             b = manipulations.expand_dims(b, axis=1)
             vector_flag = True
+            both_vec += 1
+        both_vec = True if both_vec == 2 else False
 
         split_0_flag = False
         split_1_flag = False
@@ -185,7 +190,7 @@ def matmul(a, b):
             c += a._DNDarray__array @ b._DNDarray__array[a_idx[1].start:a_idx[1].start + a.lshape[-1], :]
             a.comm.Allreduce(MPI.IN_PLACE, c, MPI.SUM)
             c = c if not vector_flag else c.squeeze()
-            c = factories.array(c, split=a.split if b.gshape[1] > 1 else 0)
+            c = factories.array(c, split=a.split if b.gshape[1] > 1 else None)
             return c
 
         elif a.split is None and b.split == 0:
@@ -461,7 +466,11 @@ def matmul(a, b):
 
                     del b_lp_data[pr]
 
-            c = c if not vector_flag else factories.array(c._DNDarray__array.squeeze(), is_split=0)
+            if vector_flag:
+                c_loc = c._DNDarray__array.squeeze()
+                if c_loc.nelement() == 1:
+                    c = torch.tensor(c_loc)
+                c = factories.array(c_loc, is_split=0)
             return c
 
         elif split_1_flag:
@@ -584,7 +593,7 @@ def matmul(a, b):
             split = a.split if b.gshape[1] > 1 else 0
             split = split if not vector_flag else 0
             res = res if not vector_flag else res.squeeze()
-            c = factories.array(res, split=split)
+            c = factories.array(res, split=split if not both_vec else None)
             return c
 
 

@@ -637,65 +637,34 @@ class MPICommunication(Communication):
         # keep a reference to the original buffer object
         original_recvbuf = recvbuf
 
-        # Simple case, continuos buffers can be transmitted as is
-        if(send_axis < 2 and recv_axis < 2):
-            send_axis_permutation = list(range(recvbuf.ndimension()))
-            recv_axis_permutation = list(range(recvbuf.ndimension()))
 
-            # Minimal Fix; Could possibly be improved when reworking counts, displs algorithmics
-            if(self.size>1):
-                send_axis_permutation[0], send_axis_permutation[send_axis] = send_axis, 0
-                recv_axis_permutation[0], recv_axis_permutation[recv_axis] = recv_axis, 0
-
-            else: recv_counts = send_counts
-
-            sendbuf = sendbuf.permute(*send_axis_permutation)
-            recvbuf = recvbuf.permute(*recv_axis_permutation)
-
-            # prepare buffer objects
-            mpi_sendbuf = self.as_buffer(sendbuf, send_counts, send_displs)
-            if send_counts is None:
-                mpi_sendbuf[1] //= self.size
-
-            mpi_recvbuf = self.as_buffer(recvbuf, recv_counts, recv_displs)
-            if recv_counts is None:
-                mpi_recvbuf[1] //= self.size
-
-            # perform the scatter operation
-            exit_code = func(mpi_sendbuf, mpi_recvbuf, **kwargs)
-            # undo the recvbuf permutation and assign the temporary buffer to the original recvbuf
-            if recv_axis != 0:
-                recvbuf = recvbuf.permute(*recv_axis_permutation)
-                original_recvbuf.set_(recvbuf.storage(), recvbuf.storage_offset(), recvbuf.shape, recvbuf.stride())
-
-        # slightly more difficult situation, senc and receive buffer need custom datatype preparation;
+        #  send and receive buffer need custom datatype preparation;
         # operation is performed via alltoallw
+        if (recv_axis == send_axis):
+            raise NotImplementedError(
+                'AllToAll for same axes not supported. Please choose send_axis and recv_axis to be different.')
+
+        # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
+        axis_permutation = list(range(recvbuf.ndimension()))
+        if(send_axis == 0):
+            axis_permutation[1], axis_permutation[send_axis] = send_axis, 1
+            axis_permutation[recv_axis] = axis_permutation[0]
+            axis_permutation[0] = recv_axis
+
         else:
-            if (recv_axis == send_axis):
-                raise NotImplementedError(
-                    'AllToAll for same axes not supported. Please choose send_axis and recv_axis to be different.')
+            axis_permutation[0], axis_permutation[recv_axis] = recv_axis, 0
+            axis_permutation[send_axis] = axis_permutation[1]
+            axis_permutation[1] = send_axis
 
-            # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
-            axis_permutation = list(range(recvbuf.ndimension()))
-            if(send_axis == 0):
-                axis_permutation[1], axis_permutation[send_axis] = send_axis, 1
-                axis_permutation[recv_axis] = axis_permutation[0]
-                axis_permutation[0] = recv_axis
+        sendbuf = sendbuf.permute(*axis_permutation)
+        recvbuf = recvbuf.permute(*axis_permutation)
 
-            else:
-                axis_permutation[0], axis_permutation[recv_axis] = recv_axis, 0
-                axis_permutation[send_axis] = axis_permutation[1]
-                axis_permutation[1] = send_axis
+        # prepare buffer objects
+        mpi_sendbuf = self.alltoall_sendbuffer(sendbuf)
+        mpi_recvbuf = self.alltoall_recvbuffer(recvbuf)
 
-            sendbuf = sendbuf.permute(*axis_permutation)
-            recvbuf = recvbuf.permute(*axis_permutation)
-
-            # prepare buffer objects
-            mpi_sendbuf = self.alltoall_sendbuffer(sendbuf)
-            mpi_recvbuf = self.alltoall_recvbuffer(recvbuf)
-
-            exit_code = self.handle.Alltoallw(mpi_sendbuf, mpi_recvbuf, **kwargs)
-            original_recvbuf.set_(recvbuf.storage(), recvbuf.storage_offset(), original_recvbuf.shape, original_recvbuf.stride())
+        exit_code = self.handle.Alltoallw(mpi_sendbuf, mpi_recvbuf, **kwargs)
+        original_recvbuf.set_(recvbuf.storage(), recvbuf.storage_offset(), original_recvbuf.shape, original_recvbuf.stride())
 
         return exit_code
 

@@ -18,20 +18,17 @@ def eq(t1, t2):
     """
     Element-wise rich comparison of equality between values from two operands, commutative.
     Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
-
     Parameters
     ----------
     t1: tensor or scalar
         The first operand involved in the comparison
     t2: tensor or scalar
         The second operand involved in the comparison
-
     Returns
     -------
     result: ht.DNDarray
         A uint8-tensor holding 1 for all elements in which values of t1 are equal to values of t2, 0 for all other
         elements
-
     Examples:
     ---------
     >>> import heat as ht
@@ -39,47 +36,28 @@ def eq(t1, t2):
     >>> ht.eq(T1, 3.0)
     tensor([[0, 0],
             [1, 0]])
-
     >>> T2 = ht.float32([[2, 2], [2, 2]])
     >>> ht.eq(T1, T2)
     tensor([[0, 1],
             [0, 0]])
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.eq, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.eq, t1, t2)
+    return operations.__binary_op(torch.eq, t1, t2)
 
 
 def equal(t1, t2):
     """
     Overall comparison of equality between two tensors. Returns True if two tensors have the same size and elements,
     and False otherwise.
-
     Parameters
     ----------
     t1: tensor or scalar
         The first operand involved in the comparison
     t2: tensor or scalar
         The second operand involved in the comparison
-
     Returns
     -------
     result: bool
         True if t1 and t2 have the same size and elements, False otherwise
-
     Examples:
     ---------
     >>> import heat as ht
@@ -92,24 +70,7 @@ def equal(t1, t2):
     >>> ht.eq(T1, 3.0)
     False
     """
-    if np.isscalar(t1):
-        try:
-            tensor_1 = factories.array([t1])
-        except (ValueError, TypeError,):
-            raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-    else:
-        tensor_1 = t1
-    if np.isscalar(t2):
-        try:
-            tensor_2 = factories.array([t2])
-        except (ValueError, TypeError,):
-            raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-    else:
-        tensor_2 = t2
-
-    result_tensor = operations.__binary_op(torch.equal, tensor_1, tensor_2)
-
-
+    result_tensor = operations.__binary_op(torch.equal, t1, t2)
     result_value = result_tensor._DNDarray__array
     if isinstance(result_value, torch.Tensor):
         result_value = True
@@ -122,20 +83,17 @@ def ge(t1, t2):
     Element-wise rich greater than or equal comparison between values from operand t1 with respect to values of
     operand t2 (i.e. t1 >= t2), not commutative.
     Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
-
     Parameters
     ----------
     t1: tensor or scalar
         The first operand to be compared greater than or equal to second operand
     t2: tensor or scalar
        The second operand to be compared less than or equal to first operand
-
     Returns
     -------
     result: ht.DNDarray
         A uint8-tensor holding 1 for all elements in which values of t1 are greater than or equal tp values of t2,
         0 for all other elements
-
     Examples
     -------
     >>> import heat as ht
@@ -143,28 +101,12 @@ def ge(t1, t2):
     >>> ht.ge(T1, 3.0)
     tensor([[0, 0],
             [1, 1]], dtype=torch.uint8)
-
     >>> T2 = ht.float32([[2, 2], [2, 2]])
     >>> ht.ge(T1, T2)
     tensor([[0, 1],
             [1, 1]], dtype=torch.uint8)
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.ge, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.ge, t1, t2)
+    return operations.__binary_op(torch.ge, t1, t2)
 
 
 def gt(t1, t2):
@@ -172,21 +114,17 @@ def gt(t1, t2):
     Element-wise rich greater than comparison between values from operand t1 with respect to values of
     operand t2 (i.e. t1 > t2), not commutative.
     Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
-
     Parameters
     ----------
     t1: tensor or scalar
        The first operand to be compared greater than second operand
-
     t2: tensor or scalar
        The second operand to be compared less than first operand
-
     Returns
     -------
     result: ht.DNDarray
        A uint8-tensor holding 1 for all elements in which values of t1 are greater than values of t2,
        0 for all other elements
-
     Examples
     -------
     >>> import heat as ht
@@ -194,28 +132,12 @@ def gt(t1, t2):
     >>> ht.gt(T1, 3.0)
     tensor([[0, 0],
             [0, 1]], dtype=torch.uint8)
-
     >>> T2 = ht.float32([[2, 2], [2, 2]])
     >>> ht.gt(T1, T2)
     tensor([[0, 0],
             [1, 1]], dtype=torch.uint8)
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.gt, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.gt, t1, t2)
+    return operations.__binary_op(torch.gt, t1, t2)
 
 
 def le(t1, t2):
@@ -223,20 +145,17 @@ def le(t1, t2):
     Element-wise rich less than or equal comparison between values from operand t1 with respect to values of
     operand t2 (i.e. t1 <= t2), not commutative.
     Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
-
     Parameters
     ----------
     t1: tensor or scalar
        The first operand to be compared less than or equal to second operand
     t2: tensor or scalar
        The second operand to be compared greater than or equal to first operand
-
     Returns
     -------
     result: ht.DNDarray
        A uint8-tensor holding 1 for all elements in which values of t1 are less than or equal to values of t2,
        0 for all other elements
-
     Examples
     -------
     >>> import heat as ht
@@ -244,28 +163,12 @@ def le(t1, t2):
     >>> ht.le(T1, 3.0)
     tensor([[1, 1],
             [1, 0]], dtype=torch.uint8)
-
     >>> T2 = ht.float32([[2, 2], [2, 2]])
     >>> ht.le(T1, T2)
     tensor([[1, 1],
             [0, 0]], dtype=torch.uint8)
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.le, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.le, t1, t2)
+    return operations.__binary_op(torch.le, t1, t2)
 
 
 def lt(t1, t2):
@@ -273,21 +176,17 @@ def lt(t1, t2):
     Element-wise rich less than comparison between values from operand t1 with respect to values of
     operand t2 (i.e. t1 < t2), not commutative.
     Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
-
     Parameters
     ----------
     t1: tensor or scalar
         The first operand to be compared less than second operand
-
     t2: tensor or scalar
         The second operand to be compared greater than first operand
-
     Returns
     -------
     result: ht.DNDarray
         A uint8-tensor holding 1 for all elements in which values of t1 are less than values of t2,
         0 for all other elements
-
     Examples
     -------
     >>> import heat as ht
@@ -300,42 +199,24 @@ def lt(t1, t2):
     tensor([[1, 0],
             [0, 0]], dtype=torch.uint8)
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.lt, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.lt, t1, t2)
+    return operations.__binary_op(torch.lt, t1, t2)
 
 
 def ne(t1, t2):
     """
     Element-wise rich comparison of non-equality between values from two operands, commutative.
-    Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument. 
-
+    Takes the first and second operand (scalar or tensor) whose elements are to be compared as argument.
     Parameters
     ----------
     t1: tensor or scalar
         The first operand involved in the comparison
     t2: tensor or scalar
         The second operand involved in the comparison
-
     Returns
     -------
     result: ht.DNDarray
         A uint8-tensor holding 1 for all elements in which values of t1 are not equal to values of t2,
         0 for all other elements
-
     Examples:
     ---------
     >>> import heat as ht
@@ -343,25 +224,9 @@ def ne(t1, t2):
     >>> ht.ne(T1, 3.0)
     tensor([[1, 1],
             [0, 1]])
-
     >>> T2 = ht.float32([[2, 2], [2, 2]])
     >>> ht.ne(T1, T2)
     tensor([[1, 0],
             [1, 1]])
     """
-    if np.isscalar(t1):
-        if np.isscalar(t2):
-            try:
-                tensor_1 = factories.array(t1)
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-        else:
-            try:
-                tensor_1 = factories.array([t1])
-            except (ValueError, TypeError,):
-                raise TypeError('First operand must be numeric scalar or NDNArray, but was {}'.format(type(t1)))
-
-        result = operations.__binary_op(torch.ne, tensor_1, t2)
-        return result
-    else:
-        return operations.__binary_op(torch.ne, t1, t2)
+    return operations.__binary_op(torch.ne, t1, t2)
