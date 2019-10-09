@@ -642,7 +642,9 @@ class MPICommunication(Communication):
         # operation is performed via alltoallw
         # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
 
-        if (send_axis < 2 and recv_axis < 2) or (send_axis == recv_axis):
+        if (send_axis == recv_axis):
+            pass
+        elif (send_axis < 2 and recv_axis < 2):
             send_axis_permutation = list(range(recvbuf.ndimension()))
             recv_axis_permutation = list(range(recvbuf.ndimension()))
 
