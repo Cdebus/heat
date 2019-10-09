@@ -1,7 +1,7 @@
 HeAT - Helmholtz Analytics Toolkit
 ==================================
 
-![HeAT Logo](doc/images/logo_HeAT.png)
+![HeAT Logo](https://raw.githubusercontent.com/helmholtz-analytics/heat/master/doc/images/logo_HeAT.png)
 
 HeAT is a distributed tensor framework for high performance data analytics.
 
@@ -15,9 +15,18 @@ Project Status
 Goals
 -----
 
-HeAT is a flexible and seamless open-source software for high performance data analytics and machine learnings. It provides highly optimized algorithms and data structures for tensor computations using CPUs, GPUs and distributed cluster systems on top of MPI. The goal of HeAT is to fill the gap between data analytics and machine learning libraries with a strong focus on on single-node performance, and traditional high-performance computing (HPC). HeAT's generic Python-first programming interface integrates seamlessly with the existing data science ecosystem and makes it as effortless as using numpy to write scalable scientific and data science applications.
+HeAT is a flexible and seamless open-source software for high performance data
+analytics and machine learning. It provides highly optimized algorithms and data
+structures for tensor computations using CPUs, GPUs and distributed cluster
+systems on top of MPI. The goal of HeAT is to fill the gap between data
+analytics and machine learning libraries with a strong focus on on single-node
+performance, and traditional high-performance computing (HPC). HeAT's generic
+Python-first programming interface integrates seamlessly with the existing data
+science ecosystem and makes it as effortless as using numpy to write scalable
+scientific and data science applications.
 
-HeAT allows you tackle your actual Big Data challenges that go beyond the computational and memory needs of your laptop and desktop.
+HeAT allows you to tackle your actual Big Data challenges that go beyond the
+computational and memory needs of your laptop and desktop.
 
 Features
 --------
@@ -27,6 +36,15 @@ Features
 * Powerful data analytics and machine learning methods
 * Abstracted communication via split tensors
 * Python API
+
+Getting Started
+---------------
+
+Check out our Jupyter Notebook [tutorial](https://github.com/helmholtz-analytics/heat/blob/master/scripts/tutorial.ipynb)
+right here on Github or in the /scripts directory.
+
+The complete documentation of the latest version is always deployed on
+[Read the Docs](https://heat.readthedocs.io/).
 
 Requirements
 ------------
@@ -43,11 +61,18 @@ Tagged releases are made available on the
 [Python Package Index (PyPI)](https://pypi.org/project/heat/). You can typically
 install the latest version with
 
-> $ pip install heat
+> $ pip install heat[hdf5, netcdf]
+
+where the part in brackets is a list of optional dependencies. You can omit
+it, if you do not need HDF5 or NetCDF support.
 
 If you want to work with the development version, you can checkout the sources using
 
 > $ git clone https://github.com/helmholtz-analytics/heat.git
+
+The installation can then be done from the checked out sources with
+
+> $ pip install .[hdf5, netcdf]
 
 License
 -------

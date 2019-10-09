@@ -13,6 +13,14 @@ class TestCommunication(unittest.TestCase):
             [4, 5, 6]
         ], dtype=torch.float32)
 
+        cls.sorted3Dtensor = ht.float32([
+        [[0, 1, 2, 3, 4],
+        [10, 11, 12, 13, 14],
+        [20, 21, 22, 23, 24]],
+        [[100, 101, 102, 103, 104],
+        [110, 111, 112, 113, 114],
+        [120, 121, 122, 123, 124]]])
+
     def test_self_communicator(self):
         comm = ht.core.communication.MPI_SELF
 
@@ -148,6 +156,26 @@ class TestCommunication(unittest.TestCase):
         self.assertTrue((both_non_contiguous_data._DNDarray__array == both_non_contiguous_out._DNDarray__array).all())
         self.assertFalse(both_non_contiguous_out._DNDarray__array.is_contiguous())
 
+    def test_default_comm(self):
+        # default comm is world
+        a = ht.zeros((4, 5,))
+        self.assertIs(ht.get_comm(), ht.MPI_WORLD)
+        self.assertIs(a.comm, ht.MPI_WORLD)
+
+        # we can set a new comm that is being used for new allocation, old are not affected
+        ht.use_comm(ht.MPI_SELF)
+        b = ht.zeros((4, 5,))
+        self.assertIs(ht.get_comm(), ht.MPI_SELF)
+        self.assertIs(b.comm, ht.MPI_SELF)
+        self.assertIsNot(a.comm, ht.MPI_SELF)
+
+        # reset the comm
+        ht.use_comm(ht.MPI_WORLD)
+
+        # test for proper sanitation
+        with self.assertRaises(TypeError):
+            ht.use_comm('1')
+
     def test_allgather(self):
         # contiguous data
         data = ht.ones((1, 7,))
@@ -158,24 +186,24 @@ class TestCommunication(unittest.TestCase):
         self.assertTrue(output._DNDarray__array.is_contiguous())
         data.comm.Allgather(data, output)
 
-        # check scatter result
+        # check result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
-        self.assertTrue((output._DNDarray__array == torch.ones(ht.MPI_WORLD.size, 7,)).all())
+        self.assertTrue((output._DNDarray__array == torch.ones(ht.MPI_WORLD.size, 7)).all())
 
         # contiguous data, different gather axis
-        data = ht.ones((7, 2,))
+        data = ht.ones((7, 2,), dtype=ht.float64)
         output = ht.random.randn(7, 2 * ht.MPI_WORLD.size)
 
         # ensure prior invariants
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
-        data.comm.Allgather(data, output, axis=1)
+        data.comm.Allgather(data, output, recv_axis=1)
 
-        # check scatter result
+        # check result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
-        self.assertTrue((output._DNDarray__array == torch.ones(7, 2 * ht.MPI_WORLD.size)).all())
+        self.assertTrue((output._DNDarray__array == torch.ones(7, 2 * ht.MPI_WORLD.size, dtype=torch.float64)).all())
 
         # non-contiguous data
         data = ht.ones((4, 5,)).T
@@ -186,7 +214,7 @@ class TestCommunication(unittest.TestCase):
         self.assertTrue(output._DNDarray__array.is_contiguous())
         data.comm.Allgather(data, output)
 
-        # check scatter result
+        # check result
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(5, 4 * ht.MPI_WORLD.size,)).all())
@@ -198,12 +226,72 @@ class TestCommunication(unittest.TestCase):
         # ensure prior invariants
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
-        data.comm.Allgather(data, output, axis=1)
+        data.comm.Allgather(data, output, recv_axis=1)
 
-        # check scatter result
+        # check result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(5, 7 * ht.MPI_WORLD.size,)).all())
+
+        # contiguous data
+        data = ht.array([[ht.MPI_WORLD.rank] * 10])
+        output = ht.array([[0]*10]*ht.MPI_WORLD.size )
+
+        # ensure prior invariants
+        self.assertTrue(data._DNDarray__array.is_contiguous())
+        self.assertTrue(output._DNDarray__array.is_contiguous())
+
+        # perform the allgather operation
+        data.comm.Allgather(data, output, recv_axis=0)
+
+        # check  result
+        result = ht.array([np.arange(0, ht.MPI_WORLD.size)] * 10).T
+        self.assertTrue(ht.equal(output, result))
+
+        # contiguous data
+        data = ht.array([[ht.MPI_WORLD.rank]] * 10)
+        output = ht.array([[0] * ht.MPI_WORLD.size] * 10)
+
+        # ensure prior invariants
+        self.assertTrue(data._DNDarray__array.is_contiguous())
+        self.assertTrue(output._DNDarray__array.is_contiguous())
+
+        # perform the allgather operation
+        data.comm.Allgather(data, output, recv_axis=1)
+
+        # check  result
+        result = ht.array([np.arange(0, ht.MPI_WORLD.size)] * 10)
+        self.assertTrue(ht.equal(output, result))
+
+        # other datatypes (send numpy array)
+        data = np.array([ht.MPI_WORLD.rank] * 3)
+        output = ht.array([[0 ] * 3] * ht.MPI_WORLD.size)
+
+        # perform the allgather operation
+        ht.MPI_WORLD.Allgatherv(data, output)
+
+        # check  result
+        result = ht.array([np.arange(0, ht.MPI_WORLD.size)] * 3).T
+        self.assertTrue(ht.equal(output, result))
+
+        data = ht.array([ht.MPI_WORLD.rank] * 3)
+        output = np.array([[0] * 3] * ht.MPI_WORLD.size)
+
+        # perform the allgather operation
+        ht.MPI_WORLD.Allgatherv(data, output)
+
+        # check  result
+        result = np.array([np.arange(0, ht.MPI_WORLD.size)] * 3).T
+        self.assertTrue((output == result).all())
+
+        with self.assertRaises(TypeError):
+            data = np.array([ht.MPI_WORLD.rank] * 3)
+            output = ht.array([[0] * 3* ht.MPI_WORLD.size])
+            ht.MPI_WORLD.Allgatherv(data, output, recv_axis=1)
+        with self.assertRaises(TypeError):
+            data = ht.array([ht.MPI_WORLD.rank] * 3)
+            output = np.array([[0] * 3 * ht.MPI_WORLD.size])
+            ht.MPI_WORLD.Allgatherv(data, output, recv_axis=1)
 
     def test_allgatherv(self):
         # contiguous data buffer, contiguous output buffer
@@ -215,12 +303,12 @@ class TestCommunication(unittest.TestCase):
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
 
-        # perform the scatter operation
+        # perform the allgather operation
         counts = tuple(range(1, ht.MPI_WORLD.size + 1))
         displs = tuple(np.cumsum(range(ht.MPI_WORLD.size)))
         data.comm.Allgatherv(data, (output, counts, displs,))
 
-        # check scatter result
+        # check  result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(output_count, 10,)).all())
@@ -234,12 +322,12 @@ class TestCommunication(unittest.TestCase):
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
 
-        # perform the scatter operation
+        # perform the allgather operation
         counts = tuple(range(2, 2 * (ht.MPI_WORLD.size + 1), 2))
         displs = tuple(np.cumsum(range(0, 2 * ht.MPI_WORLD.size, 2)))
         data.comm.Allgatherv(data, (output, counts, displs,))
 
-        # check scatter result
+        # check  result
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(output_count, 10,)).all())
@@ -253,12 +341,12 @@ class TestCommunication(unittest.TestCase):
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
 
-        # perform the scatter operation
+        # perform the allgather operation
         counts = tuple(range(2, 2 * (ht.MPI_WORLD.size + 1), 2))
         displs = tuple(np.cumsum(range(0, 2 * ht.MPI_WORLD.size, 2)))
         data.comm.Allgatherv(data, (output, counts, displs,))
 
-        # check scatter result
+        # check result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(output_count, 10,)).all())
@@ -272,15 +360,37 @@ class TestCommunication(unittest.TestCase):
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
 
-        # perform the scatter operation
+        # perform the allgather operation
         counts = tuple(range(2, 2 * (ht.MPI_WORLD.size + 1), 2))
         displs = tuple(np.cumsum(range(0, 2 * ht.MPI_WORLD.size, 2)))
         data.comm.Allgatherv(data, (output, counts, displs,))
 
-        # check scatter result
+        # check result
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(output_count, 10,)).all())
+
+        # contiguous data buffer
+        data = ht.array([[ht.MPI_WORLD.rank] * 10] * (ht.MPI_WORLD.size + 1))
+
+        # contiguous output buffer
+        output_shape = data.lshape
+        output = ht.zeros(output_shape, dtype=ht.int64)
+
+        # Results for comparison
+        first_line = ht.array([[0] * 10])
+        last_line = ht.array([[ht.MPI_WORLD.size - 1] * 10])
+
+        # perform allgather operation
+        send_counts, send_displs, _ = data.comm.counts_displs_shape(data.lshape, 0)
+        recv_counts, recv_displs, _ = data.comm.counts_displs_shape(output.lshape, 0)
+        data.comm.Allgatherv((data, send_counts, send_displs,), (output, recv_counts, recv_displs,))
+
+        # check result
+        self.assertTrue(data._DNDarray__array.is_contiguous())
+        self.assertTrue(output._DNDarray__array.is_contiguous())
+        self.assertTrue((output[0] == first_line).all())
+        self.assertTrue((output[output.lshape[0]-1] == last_line).all())
 
     def test_allreduce(self):
         # contiguous data
@@ -354,7 +464,7 @@ class TestCommunication(unittest.TestCase):
         # ensure prior invariants
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertTrue(output._DNDarray__array.is_contiguous())
-        data.comm.Alltoall(data, output, axis=1)
+        data.comm.Alltoall(data, output, send_axis=1)
 
         # check scatter result
         self.assertTrue(data._DNDarray__array.is_contiguous())
@@ -384,13 +494,23 @@ class TestCommunication(unittest.TestCase):
         # ensure prior invariants
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
-        data.comm.Alltoall(data, output, axis=1)
+        data.comm.Alltoall(data, output, send_axis=1)
 
         # check scatter result
         self.assertTrue(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
         comparison = torch.ones((10, 2 * ht.MPI_WORLD.size,), dtype=torch.int64)
         self.assertTrue((output._DNDarray__array == comparison).all())
+
+        with self.assertRaises(TypeError):
+            data = np.array([ht.MPI_WORLD.rank] * 3)
+            output = ht.array([[0] * 3* ht.MPI_WORLD.size])
+            ht.MPI_WORLD.Alltoall(data, output, send_axis=1)
+        with self.assertRaises(TypeError):
+            data = ht.array([ht.MPI_WORLD.rank] * 3)
+            output = np.array([[0] * 3 * ht.MPI_WORLD.size])
+            ht.MPI_WORLD.Alltoall(data, output, send_axis=1)
+
 
     def test_alltoallv(self):
         # contiguous data buffer
@@ -723,19 +843,18 @@ class TestCommunication(unittest.TestCase):
             self.assertTrue((output._DNDarray__array == torch.ones(ht.MPI_WORLD.size, 7,)).all())
 
             # contiguous data, different gather axis
-            data = ht.ones((7, 2,))
+            data = ht.ones((7, 2,), dtype=ht.float64)
             output = ht.random.randn(7, 2 * ht.MPI_WORLD.size)
 
             # ensure prior invariants
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertTrue(output._DNDarray__array.is_contiguous())
-            req = data.comm.Iallgather(data, output, axis=1)
+            req = data.comm.Iallgather(data, output, recv_axis=1)
             req.wait()
-
             # check scatter result
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertTrue(output._DNDarray__array.is_contiguous())
-            self.assertTrue((output._DNDarray__array == torch.ones(7, 2 * ht.MPI_WORLD.size)).all())
+            self.assertTrue((output._DNDarray__array == torch.ones(7, 2 * ht.MPI_WORLD.size, dtype=torch.float64)).all())
 
             # non-contiguous data
             data = ht.ones((4, 5,)).T
@@ -759,7 +878,7 @@ class TestCommunication(unittest.TestCase):
             # ensure prior invariants
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertFalse(output._DNDarray__array.is_contiguous())
-            req = data.comm.Iallgather(data, output, axis=1)
+            req = data.comm.Iallgather(data, output, recv_axis=1)
             req.wait()
 
             # check scatter result
@@ -939,7 +1058,7 @@ class TestCommunication(unittest.TestCase):
             # ensure prior invariants
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertTrue(output._DNDarray__array.is_contiguous())
-            req = data.comm.Ialltoall(data, output, axis=1)
+            req = data.comm.Ialltoall(data, output, send_axis=1)
             req.wait()
 
             # check scatter result
@@ -971,7 +1090,7 @@ class TestCommunication(unittest.TestCase):
             # ensure prior invariants
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertFalse(output._DNDarray__array.is_contiguous())
-            req = data.comm.Ialltoall(data, output, axis=1)
+            req = data.comm.Ialltoall(data, output, send_axis=1)
             req.wait()
 
             # check scatter result
@@ -1186,7 +1305,7 @@ class TestCommunication(unittest.TestCase):
     def test_igather(self):
         try:
             # contiguous data
-            data = ht.ones((1, 5,), dtype=ht.float32)
+            data = ht.ones((1, 5,), dtype=ht.float64)
             output = ht.random.randn(ht.MPI_WORLD.size, 5)
 
             # ensure prior invariants
@@ -1199,10 +1318,10 @@ class TestCommunication(unittest.TestCase):
             self.assertTrue(data._DNDarray__array.is_contiguous())
             self.assertTrue(output._DNDarray__array.is_contiguous())
             if data.comm.rank == 0:
-                self.assertTrue((output._DNDarray__array == torch.ones((ht.MPI_WORLD.size, 5,), dtype=torch.float32)).all())
+                self.assertTrue((output._DNDarray__array == torch.ones((ht.MPI_WORLD.size, 5,), dtype=torch.float64)).all())
 
             # contiguous data, different gather axis
-            data = ht.ones((5, 2,), dtype=ht.float32)
+            data = ht.ones((5, 2,), dtype=ht.float64)
             output = ht.random.randn(5, 2 * ht.MPI_WORLD.size)
 
             # ensure prior invariants
@@ -1216,11 +1335,11 @@ class TestCommunication(unittest.TestCase):
             self.assertTrue(output._DNDarray__array.is_contiguous())
             if data.comm.rank == 0:
                 self.assertTrue(
-                    (output._DNDarray__array == torch.ones((5, 2 * ht.MPI_WORLD.size,), dtype=torch.float32)).all()
+                    (output._DNDarray__array == torch.ones((5, 2 * ht.MPI_WORLD.size,), dtype=torch.float64)).all()
                 )
 
             # non-contiguous data
-            data = ht.ones((3, 5,), dtype=ht.float32).T
+            data = ht.ones((3, 5,), dtype=ht.float64).T
             output = ht.random.randn(5, 3 * ht.MPI_WORLD.size)
 
             # ensure prior invariants
@@ -1234,11 +1353,11 @@ class TestCommunication(unittest.TestCase):
             self.assertTrue(output._DNDarray__array.is_contiguous())
             if data.comm.rank == 0:
                 self.assertTrue(
-                    (output._DNDarray__array == torch.ones((5, 3 * ht.MPI_WORLD.size,), dtype=torch.float32)).all()
+                    (output._DNDarray__array == torch.ones((5, 3 * ht.MPI_WORLD.size,), dtype=torch.float64)).all()
                 )
 
             # non-contiguous output, different gather axis
-            data = ht.ones((5, 3,), dtype=ht.float32)
+            data = ht.ones((5, 3,), dtype=ht.float64)
             output = ht.random.randn(3 * ht.MPI_WORLD.size, 5).T
 
             # ensure prior invariants
@@ -1252,7 +1371,7 @@ class TestCommunication(unittest.TestCase):
             self.assertFalse(output._DNDarray__array.is_contiguous())
             if data.comm.rank == 0:
                 self.assertTrue(
-                    (output._DNDarray__array == torch.ones((5, 3 * ht.MPI_WORLD.size,), dtype=torch.float32)).all()
+                    (output._DNDarray__array == torch.ones((5, 3 * ht.MPI_WORLD.size,), dtype=torch.float64)).all()
                 )
 
         # MPI implementation may not support asynchronous operations
@@ -1639,10 +1758,12 @@ class TestCommunication(unittest.TestCase):
             pass
 
     def test_mpi_in_place(self):
-        data = ht.ones((ht.MPI_WORLD.size, ht.MPI_WORLD.size,), dtype=ht.int32)
+        size = ht.MPI_WORLD.size
+        data = ht.ones((size, size,), dtype=ht.int32)
         data.comm.Allreduce(ht.MPI.IN_PLACE, data, op=ht.MPI.SUM)
 
-        self.assertTrue((data._DNDarray__array == ht.MPI_WORLD.size).all())
+        self.assertTrue((data._DNDarray__array == size).all())
+        # MPI Inplace is not allowed for AllToAll
 
     def test_reduce(self):
         # contiguous data
@@ -1824,27 +1945,28 @@ class TestCommunication(unittest.TestCase):
         output = ht.zeros_like(data)
 
         # main axis send buffer, main axis receive buffer
-        data.comm.Alltoall(data, output, axis=0)
+        data.comm.Alltoall(data, output, send_axis=0)
         comparison = torch.arange(ht.MPI_WORLD.size).reshape(-1, 1).repeat(1, ht.MPI_WORLD.size)
         self.assertTrue((output._DNDarray__array == comparison).all())
 
         # minor axis send buffer, main axis receive buffer
-        data.comm.Alltoall(data, output, axis=1)
+        data.comm.Alltoall(data, output, send_axis=1)
         comparison = torch.arange(ht.MPI_WORLD.size).reshape(1, -1).repeat(ht.MPI_WORLD.size, 1)
         self.assertTrue((output._DNDarray__array == comparison).all())
 
         # main axis send buffer, minor axis receive buffer
         data = ht.array([[ht.MPI_WORLD.rank] * (2 * ht.MPI_WORLD.size)] * ht.MPI_WORLD.size)
         output = ht.zeros((2 * ht.MPI_WORLD.size, ht.MPI_WORLD.size), dtype=data.dtype)
-        data.comm.Alltoall(data, output, axis=0, recv_axis=1)
+        data.comm.Alltoall(data, output, send_axis=0, recv_axis=1)
         comparison = torch.arange(ht.MPI_WORLD.size).reshape(1, -1).repeat(2 * ht.MPI_WORLD.size, 1)
         self.assertTrue((output._DNDarray__array == comparison).all())
 
         # minor axis send buffer, minor axis receive buffer
         data = ht.array([range(ht.MPI_WORLD.size)] * ht.MPI_WORLD.size)
         output = ht.zeros((ht.MPI_WORLD.size, ht.MPI_WORLD.size), dtype=data.dtype)
-        data.comm.Alltoall(data, output, axis=1, recv_axis=1)
+        data.comm.Alltoall(data, output, send_axis=0, recv_axis=1)
         comparison = torch.arange(ht.MPI_WORLD.size).reshape(-1, 1).repeat(1, ht.MPI_WORLD.size)
+
         self.assertTrue((output._DNDarray__array == comparison).all())
 
     def test_scatterv(self):
@@ -1927,3 +2049,74 @@ class TestCommunication(unittest.TestCase):
         self.assertFalse(data._DNDarray__array.is_contiguous())
         self.assertFalse(output._DNDarray__array.is_contiguous())
         self.assertTrue((output._DNDarray__array == torch.ones(output_count, 12,)).all())
+
+
+    def test_allgathervSorting(self):
+
+        test1 = self.sorted3Dtensor.copy()
+        test2 = self.sorted3Dtensor.copy()
+        test3 = self.sorted3Dtensor.copy()
+        result = self.sorted3Dtensor.copy()
+
+        test1.resplit_(axis=0)
+        test2.resplit_(axis=1)
+        test3.resplit_(axis=2)
+
+        gathered1_counts, gathered1_displs, _ = test1.comm.counts_displs_shape(test1.shape, test1.split)
+        gathered1 = torch.empty(self.sorted3Dtensor.shape)
+        gathered2_counts, gathered2_displs, _ = test2.comm.counts_displs_shape(test2.shape, test2.split)
+        gathered2 = torch.empty(self.sorted3Dtensor.shape)
+        gathered3_counts, gathered3_displs, _ = test3.comm.counts_displs_shape(test3.shape, test3.split)
+        gathered3 = torch.empty(self.sorted3Dtensor.shape)
+
+        test1.comm.Allgatherv(test1,  (gathered1, gathered1_counts, gathered1_displs,), recv_axis=test1.split)
+        self.assertTrue(torch.equal(gathered1, result._DNDarray__array))
+
+        test2.comm.Allgatherv(test2,  (gathered2, gathered2_counts, gathered2_displs,), recv_axis=test2.split)
+        self.assertTrue(torch.equal(gathered2, result._DNDarray__array))
+
+        test3.comm.Allgatherv(test3,  (gathered3, gathered3_counts, gathered3_displs,), recv_axis=test3.split)
+        self.assertTrue(torch.equal(gathered3, result._DNDarray__array))
+
+    def test_alltoallSorting(self):
+        test1 = self.sorted3Dtensor.copy()
+        test1.resplit_(axis=2)
+        comparison1 = self.sorted3Dtensor.copy()
+        comparison1.resplit_(axis=1)
+        redistributed1 = torch.empty(comparison1.lshape, dtype=test1.dtype.torch_type())
+        test1.comm.Alltoallv(test1._DNDarray__array, redistributed1, send_axis=comparison1.split, recv_axis=test1.split)
+        self.assertTrue(torch.equal(redistributed1, comparison1._DNDarray__array))
+
+        test2 = self.sorted3Dtensor.copy()
+        test2.resplit_(axis=1)
+        comparison2 = self.sorted3Dtensor.copy()
+        comparison2.resplit_(axis=0)
+        send_counts, send_displs, _ = test2.comm.counts_displs_shape(test2.lshape, comparison2.split)
+        recv_counts, recv_displs, _ = test2.comm.counts_displs_shape(test2.shape, test2.split)
+        redistributed2 = torch.empty(comparison2.lshape, dtype=test2.dtype.torch_type())
+        test2.comm.Alltoallv((test2._DNDarray__array, send_counts, send_displs,),
+                             (redistributed2, recv_counts, recv_displs,), send_axis=comparison2.split,
+                             recv_axis=test2.split)
+        self.assertTrue(torch.equal(redistributed2, comparison2._DNDarray__array))
+
+
+        test3 = self.sorted3Dtensor.copy()
+        test3.resplit_(axis=0)
+        comparison3 = self.sorted3Dtensor.copy()
+        comparison3.resplit_(axis=2)
+        redistributed3 = torch.empty(comparison3.lshape, dtype=test3.dtype.torch_type())
+        test3.comm.Alltoallv(test3._DNDarray__array, redistributed3, send_axis=comparison3.split, recv_axis=test3.split)
+        self.assertTrue(torch.equal(redistributed3, comparison3._DNDarray__array))
+
+        test4 = self.sorted3Dtensor.copy()
+        test4.resplit_(axis=2)
+        comparison4 = self.sorted3Dtensor.copy()
+        comparison4.resplit_(axis=0)
+        redistributed4 = torch.empty(comparison4.lshape, dtype=test4.dtype.torch_type())
+        test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=comparison4.split, recv_axis=test4.split)
+        self.assertTrue(torch.equal(redistributed4, comparison4._DNDarray__array))
+
+        with self.assertRaises(NotImplementedError):
+            test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=2, recv_axis=2)
+        with self.assertRaises(NotImplementedError):
+            test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=None)

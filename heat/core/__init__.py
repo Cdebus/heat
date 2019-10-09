@@ -4,11 +4,12 @@ from .constants import *
 from .devices import *
 from .exponential import *
 from .factories import *
+from .indexing import *
 from .io import *
 from .linalg import *
 from .logical import *
+from .manipulations import *
 from .memory import *
-from .manipulation import *
 from .operations import *
 from . import random
 from .relational import *
