@@ -642,9 +642,9 @@ class MPICommunication(Communication):
         # operation is performed via alltoallw
         # Send_axis-Permutation: [recv_axis, send_axis, rest ...]
 
-        if (send_axis == recv_axis):
-            pass
-        elif (send_axis < 2 and recv_axis < 2):
+        #if (send_axis == recv_axis):
+         #   pass
+        if (send_axis < 2 and recv_axis < 2):
             send_axis_permutation = list(range(recvbuf.ndimension()))
             recv_axis_permutation = list(range(recvbuf.ndimension()))
 
@@ -676,27 +676,27 @@ class MPICommunication(Communication):
         mpi_sendbuf = self.alltoall_sendbuffer(sendbuf)
         mpi_recvbuf = self.alltoall_recvbuffer(recvbuf)
 
-        exit_code = self.handle.Alltoallw(mpi_sendbuf, mpi_recvbuf, **kwargs)
+        exit_code = func(mpi_sendbuf, mpi_recvbuf, **kwargs)
         original_recvbuf.set_(recvbuf.storage(), recvbuf.storage_offset(), original_recvbuf.shape, original_recvbuf.stride())
 
         return exit_code
 
 
     def Alltoall(self, sendbuf, recvbuf, send_axis=0, recv_axis=None):
-        return self.__alltoall_like(self.handle.Alltoall,sendbuf, recvbuf, send_axis, recv_axis)
+        return self.__alltoall_like(self.handle.Alltoallw,sendbuf, recvbuf, send_axis, recv_axis)
     Alltoall.__doc__ = MPI.Comm.Alltoall.__doc__
 
     def Alltoallv(self, sendbuf, recvbuf, send_axis=0, recv_axis=None):
-        return self.__alltoall_like(self.handle.Alltoallv, sendbuf, recvbuf, send_axis, recv_axis)
+        return self.__alltoall_like(self.handle.Alltoallw, sendbuf, recvbuf, send_axis, recv_axis)
     Alltoallv.__doc__ = MPI.Comm.Alltoallv.__doc__
 
     def Ialltoall(self, sendbuf, recvbuf, send_axis=0, recv_axis=None):
         return self.__alltoall_like(
-            self.handle.Ialltoall, sendbuf, recvbuf, send_axis, recv_axis)
+            self.handle.Ialltoallw, sendbuf, recvbuf, send_axis, recv_axis)
     Ialltoall.__doc__ = MPI.Comm.Ialltoall.__doc__
 
     def Ialltoallv(self, sendbuf, recvbuf, send_axis=0, recv_axis=None):
-        return self.__alltoall_like(self.handle.Ialltoallv, sendbuf, recvbuf, send_axis, recv_axis)
+        return self.__alltoall_like(self.handle.Ialltoallw, sendbuf, recvbuf, send_axis, recv_axis)
     Ialltoallv.__doc__ = MPI.Comm.Ialltoallv.__doc__
 
 
