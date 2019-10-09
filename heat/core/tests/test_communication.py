@@ -2115,8 +2115,8 @@ class TestCommunication(unittest.TestCase):
         redistributed4 = torch.empty(comparison4.lshape, dtype=test4.dtype.torch_type())
         test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=comparison4.split, recv_axis=test4.split)
         self.assertTrue(torch.equal(redistributed4, comparison4._DNDarray__array))
+        #test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=2, recv_axis=2)
+        #self.assertTrue(torch.equal(redistributed4, test4._DNDarray__array))
 
-        with self.assertRaises(NotImplementedError):
-            test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=2, recv_axis=2)
         with self.assertRaises(NotImplementedError):
             test4.comm.Alltoallv(test4._DNDarray__array, redistributed4, send_axis=None)
