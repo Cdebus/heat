@@ -49,7 +49,7 @@ def main():
     #plt.imshow(img)
     #plt.savefig(file)
 
-    ###Experiment 3:
+    ###Experiment 3-4:
     #write centroids to csv
     if data.comm.rank == 0:
         np_centroids = centroids._DNDarray__array.numpy().reshape((1024, 185, 7))

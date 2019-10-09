@@ -2,7 +2,7 @@
 
 #SBATCH --exclusive
 #SBATCH -N 1 
-#SBATCH -n 5
+#SBATCH -n 14
 #SBATCH -t 03:00:00
 #SBATCH -J Heat_kMeans
 #SBATCH --mem=350000
@@ -15,7 +15,7 @@ export PYTHONPATH=`pwd`
 
 function runkmeans()
 {
-	echo "Running kmeans clustering (Databased Centroid Initialization : Test 3b )"
+	echo "Running kmeans clustering (Databased Centroid Initialization : Test 4C )"
 	echo $(date)
 	export OMP_NUM_TASK=$SLURM_NTASKS
 	echo "Number of nodes: ${OMP_NUM_TASK}"

@@ -33,23 +33,26 @@ class KMeans:
         nproc = data.comm.size
         rank = data.comm.rank
 
+
         if (data.split == None) or (data.split == 0):
-            if rank < (k % nproc):
-                num_samples = k // nproc + 1
-            else:
-                num_samples = k // nproc
+
+            procnr = []
+
+            for i in range(k):
+                procnr.append((data.gshape[0]//k*(i+1))//data.lshape[0] - 1)
 
         else:
             raise NotImplementedError('Not implemented for other splitting-axes')
 
+        num_samples = procnr.count(rank)
         local_centroids = torch.empty((num_samples, dimensions))
         for i in range(num_samples):
             x = random.randint(0, data.lshape[0] - 1)
             local_centroids[i, :] = data._DNDarray__array[x, :, 0]
 
-
-        recv_counts = np.full((nproc,), k // nproc)
-        recv_counts[:k % nproc] += 1
+        recv_counts = np.full((nproc,), 0)
+        for i in range(nproc):
+            recv_counts[i] = procnr.count(i)
 
         recv_displs = np.zeros((nproc,), dtype=recv_counts.dtype)
         np.cumsum(recv_counts[:-1], out=recv_displs[1:])
@@ -74,14 +77,15 @@ class KMeans:
 
         # initialize the centroids randomly
         centroids = self.initialize_centroids_databased(self.n_clusters, data.shape[1], data)
+
         #centroids = self.initialize_centroids(self.n_clusters, data.shape[1], self.random_state, data.device)
-        #if data.comm.rank == 0:
-        #     np_centroids = centroids._DNDarray__array.numpy().reshape((1024,185, 7 ))
-        #     for i in range(7):
-        #         img = np_centroids[:, :, i]
-        #         file = 'Initial_Centroid_'+str(i)+'.png'
-        #         plt.imshow(img)
-        #         plt.savefig(file)
+        if data.comm.rank == 0:
+             np_centroids = centroids._DNDarray__array.numpy().reshape((1024,185, 7 ))
+             for i in range(7):
+                 img = np_centroids[:, :, i]
+                 file = '/home/debu_ch/src/heat/results/Initial_Centroid_'+str(i)+'.png'
+                 plt.imshow(img)
+                 plt.savefig(file)
 
         new_centroids = centroids.copy()
 
