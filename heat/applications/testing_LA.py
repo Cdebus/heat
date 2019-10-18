@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import math
 from mpi4py import MPI
+import os
 
 def projection(u,v):
     #returns projection of v onto vector u
@@ -23,11 +24,17 @@ class EuklidianDistance():
         if(f1 != f2):
             raise RuntimeError("X and Y have differing feature dimensions (dim = 1), should be equal, but are {} and {}".format(f1,f2))
 
+        Xd = X.unsqueeze(dim=1)
+        Yd = Y.unsqueeze(dim=0)
         result = torch.zeros((k1, k2), dtype=torch.float64)
-        Y_prime = torch.zeros((k1,f1), dtype=Y.dtype)
-        for i in range(0,k2):
-            Y_prime[:,:]=Y[i,:]
-            result[:,i] = self.pdist(X, Y_prime)
+
+        for i in range(Xd.shape[0]):
+            result[i,:]=((Yd - Xd[i, :, :])**2).sum(dim=-1).sqrt()
+
+        #Y_prime = torch.zeros((k1,f1), dtype=Y.dtype)
+        #for i in range(0,k2):
+        #    Y_prime[:,:]=Y[i,:]
+        #    result[:,i] = self.pdist(X, Y_prime)
 
         return result
 
@@ -268,14 +275,14 @@ def conjgrad(A, b, x):
 def conjgrad_heat(A, b, x):
     r = b - ht.matmul(A , x)
     p = r
-    rsold = ht.matmul(r , r)._DNDarray__array.item()
+    rsold = ht.matmul(r , r).item()
 
     for i in range(len(b)):
         Ap = ht.matmul(A , p)
-        alpha = rsold / ht.matmul(p , Ap)._DNDarray__array.item()
+        alpha = rsold / ht.matmul(p , Ap).item()
         x = x + (alpha * p)
         r = r - (alpha * Ap)
-        rsnew = ht.matmul(r , r)._DNDarray__array.item()
+        rsnew = ht.matmul(r , r).item()
         if(math.sqrt(rsnew)< 1e-10):
             print("Residual r = {} reaches tolerance in it = {}".format(math.sqrt(rsnew), i))
             return  x
@@ -290,43 +297,14 @@ if __name__ == "__main__":
     comm2 = ht.MPICommunication(MPI.COMM_WORLD)
     rank = comm2.Get_rank()
 
-    A_ht = ht.array([
-        [0, 1, 1, 0, 0, 0, 0, 0, 1, 1],
-        [1, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        [1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-        [0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
-        [0, 0, 0, 1, 1, 0, 1, 1, 0, 0],
-        [0, 0, 0, 0, 0, 1, 0, 1, 0, 0],
-        [0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
-        [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [1, 0, 0, 0, 0, 0, 0, 0, 1, 0]], dtype=ht.int, split=1)
+    data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat/heat/datasets/data/iris.h5'), 'data', split=0)
+    k1, f1 = data.shape
 
-    b = ht.array([1,2,1,2,1,2,1,2,1,2])
-    x0 = ht.array([2,1,2,1,2,1,2,1,2,1])
-    x = conjgrad_heat(A_ht,b, x0)
-    print(x)
-    #degree = ht.sum(A_ht, axis=0)
-    #print("Rank {} Degree= {}, split = {}".format(degree.comm.rank, degree, degree.split))
+    Xd = data.expand_dims(axis=1)
+    Yd = data.expand_dims(axis=0)
+    result = ht.zeros((k1, k1), dtype=ht.float32)
 
-    #D_ht = ht.zeros(A_ht.shape, dtype=ht.int, split = A_ht.split)
+    for i in range(Xd.shape[0]):
+        result[i, :] = ((Yd - Xd[i, :, :]) ** 2).sum(dim=-1).sqrt()
 
-    #counts, displ, _ = D_ht.comm.counts_displs_shape(D_ht.shape, D_ht.split)
-    #columns = (displ[D_ht.comm.rank], displ[D_ht.comm.rank + 1] if (D_ht.comm.rank + 1) != D_ht.comm.size else D_ht.shape[0])
-
-    #D_ht[columns[0]:columns[1], columns[0]:columns[1]] = torch.diag(degree._DNDarray__array)
-    #print("D_ht = {}, shape = {}".format(D_ht, D_ht.shape))
-
-    #print("D = {}".format(D_ht))
-    #L_ht = D_ht - A_ht
-    #print("L = {}".format(L_ht))
-
-
-    #m = 4
-    #v0 = ht.ones((A.shape[0]))/math.sqrt(A.shape[0])
-    #n, column = L_ht.shape
-    #v0 = ht.ones(n)/math.sqrt((n))
-    #if(rank == 0): print("Starting with v0 = {}".format(v0))
-
-    #V,T =lanczos_ht(L_ht,v0,m)
 
