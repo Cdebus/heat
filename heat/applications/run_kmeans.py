@@ -22,10 +22,10 @@ class Timing:
 
 def main():
 
-    #data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/iris.h5'), 'data', split=0)
-    data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'), 'snapshots', split=0)
+    data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/iris.h5'), 'data', split=0)
+    #data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'), 'snapshots', split=0)
 
-    k = 7
+    k = 3
     kmeans = ht.ml.cluster.KMeans(n_clusters=k)
     centroids = kmeans.fit(data)
     if data.comm.rank == 0:
@@ -51,11 +51,11 @@ def main():
 
     ###Experiment 3-4:
     #write centroids to csv
-    if data.comm.rank == 0:
-        np_centroids = centroids._DNDarray__array.numpy().reshape((1024, 185, 7))
-        for i in range(7):
-            img = np_centroids[:, :, i]
-            np.savetxt("/home/debu_ch/src/heat/results/Final_Centroid_" + str(i) + ".csv", img, delimiter=",")
+    #if data.comm.rank == 0:
+    #    np_centroids = centroids._DNDarray__array.numpy().reshape((1024, 185, 7))
+    #    for i in range(7):
+    #        img = np_centroids[:, :, i]
+    #        np.savetxt("/home/debu_ch/src/heat/results/Final_Centroid_" + str(i) + ".csv", img, delimiter=",")
 
 
 if __name__ == "__main__":

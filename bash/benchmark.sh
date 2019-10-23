@@ -9,6 +9,9 @@
 #SBATCH --error=Logs/bench-run-%j.out
 #SBATCH --output=Logs/bench-run-%j.out
 
+#SBATCH --error=/home/debu_ch/src/heat/Logs/Similarity-run-%j.out
+#SBATCH --output=/home/debu_ch/src/heat/Logs/Similarity-run-%j.out
+
 set -eu; set -o pipefail
 
 source ~/src/activate.sh
