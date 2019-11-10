@@ -15,7 +15,7 @@ class TestOperations(unittest.TestCase):
         result = right_tensor + left_tensor
         self.assertEqual(result.shape, (4, 2))
 
-        # broadcast with split=0 for both operants 
+        # broadcast with split=0 for both operants
         left_tensor = ht.ones((4, 1), split=0)
         right_tensor = ht.ones((1, 2), split=0)
         result = left_tensor + right_tensor
@@ -64,6 +64,6 @@ class TestOperations(unittest.TestCase):
         self.assertEqual(result.shape, (4, 1, 3, 3, 2))
 
         with self.assertRaises(TypeError):
-            ht.add(ht.ones((1, 2)), 'wrong type')
-        #with self.assertRaises(NotImplementedError):
+            ht.add(ht.ones((1, 2)), "wrong type")
+        # with self.assertRaises(NotImplementedError):
         #    ht.add(ht.ones((1, 2), split=0), ht.ones((1, 2), split=1))
