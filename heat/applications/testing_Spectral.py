@@ -87,7 +87,7 @@ class GaussianDistance():
         return self.name
 
     def print_self(self):
-        "Metric {} with parameter sigma = {}".format(self.name, self.sigma)
+        return "Metric {} with parameter sigma = {}".format(self.name, self.sigma)
 
     def __gaussian_distance(self, x1, x2):
         gaussian = lambda x: torch.exp(-x/(2*self.sigma*self.sigma))
@@ -619,7 +619,7 @@ def test_Sending():
 
     n = 300
     limit = 2000000
-    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'), 'snapshots')
+    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test289.h5'), 'snapshots')
     sample = data_ht[:n, :]
 
     k, f = sample.shape
@@ -709,18 +709,18 @@ if __name__ == "__main__":
 
 
     ############################ Data Loading ############################
-    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'),'snapshots', split=0)
+    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/data/snapshot_matrix_296.h5'),'snapshots', split=0)
     #data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat/heat/datasets/data/iris.h5'), 'data', split=0)
     #S = ht.load_hdf5('/home/debu_ch/src/heat/results/Test248/Similarity_Gaussian.h5', 'GaussianKernel', split=0)
     if rank == 0:
-        print("Data loaded: snapshot_matrix_test284.h5")
+        print("Data loaded: snapshot_matrix_296.h5")
         start = time.perf_counter()
 
     ############################ Spectral clustering pipeline ############################
     # 1. Calculation of Similarity Matrix
     S = similarity(data_ht, metric) #Gaussian Kernel
     #S_E = similarity(data_ht) #Euclidian Distance
-    ht.save_hdf5(S, '/home/debu_ch/src/heat/results/Test248/Similarity_Gaussian.h5', 'GaussianKernel')
+    ht.save_hdf5(S, '/home/debu_ch/result/results/Test296/Similarity_Run1.h5', 'GaussianKernel')
     #ht.save_hdf5(S_E, '/home/debu_ch/src/heat/results/Test248/Similarity_Euclidian.h5', 'EuclidianDistance')
 
     if rank == 0:
@@ -730,7 +730,7 @@ if __name__ == "__main__":
 
     # 2. Calculation of Laplacian
     L = normalized_laplacian_fullyConnected(S)
-    ht.save_hdf5(L, '/home/debu_ch/src/heat/results/Test248/Laplacian.h5', 'GraphLaplacian')
+    ht.save_hdf5(L, '/home/debu_ch/result/results/Test296/Laplacian_Run1.h5', 'NormalizedFullyConnected')
 
 
     if rank == 0:
@@ -743,8 +743,8 @@ if __name__ == "__main__":
     vr = ht.random.rand(L.shape[0], split=L.split, dtype=ht.float64)
     v0 = vr/ht_norm(vr)
     Vg_norm, Tg_norm = lanczos_ht(L, m, v0)
-    ht.save_hdf5(Vg_norm, '/home/debu_ch/src/heat/results/Test248/Lanczos_V.h5', 'V')
-    ht.save_hdf5(Tg_norm, '/home/debu_ch/src/heat/results/Test248/Lanczos_T.h5', 'T')
+    ht.save_hdf5(Vg_norm, '/home/debu_ch/result/results/Test296/Lanczos_V_Run1.h5', 'V_NFC')
+    ht.save_hdf5(Tg_norm, '/home/debu_ch/result/results/Test296/Lanczos_T_Run1.h5', 'T_NFC')
 
     if rank == 0:
        stop = time.perf_counter()
@@ -758,7 +758,7 @@ if __name__ == "__main__":
     eval_sorted, indices = torch.sort(eval[:, 0], dim=0)
     evec_sorted = ev[:,indices]
 
-    ht.save_hdf5(evec_sorted, '/home/debu_ch/src/heat/results/Test248/Eigenvectors.h5', 'Evec')
+    #ht.save_hdf5(evec_sorted, '/home/debu_ch/src/heat/results/Test248/Eigenvectors.h5', 'Evec')
 
     if rank == 0:
         stop = time.perf_counter()
