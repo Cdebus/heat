@@ -24,9 +24,9 @@ def main():
 
     data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/iris.h5'), 'data', split=0)
     #data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'), 'snapshots', split=0)
-
+    print(data.comm.rank)
     k = 3
-    kmeans = ht.ml.cluster.KMeans(n_clusters=k)
+    kmeans = ht.ml.cluster.KMeans(n_clusters=k, init='kmeans++')
     centroids = kmeans.fit(data)
     if data.comm.rank == 0:
         print("FINAL CENTROIDS CALCULATED ")
