@@ -558,7 +558,6 @@ class MPICommunication(Communication):
 
         # keep a reference to the original buffer object
         original_recvbuf = recvbuf
-
         # permute the send_axis order so that the split send_axis is the first to be transmitted
         if axis != 0:
             send_axis_permutation = list(range(sendbuf.ndimension()))
