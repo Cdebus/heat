@@ -783,19 +783,21 @@ def squeeze(x, axis=None):
                     )
                 )
             out_gshape = tuple(x.gshape[dim] for dim in range(len(x.gshape)) if dim not in axis)
-            # x_gsqueezed = factories.empty(out_gshape, dtype=x.dtype)
+            x_gsqueezed = factories.empty(out_gshape, dtype=x.dtype)
 
             # HotFix
             # TODO: Perform squeeze without unsplitting
-            x_gsqueezed = resplit(x, axis=None)
-            # loffset = factories.zeros(1, dtype=types.int64)
-            # loffset.__setitem__(0, x.comm.chunk(x.gshape, x.split)[0])
-            # displs = factories.zeros(x.comm.size, dtype=types.int64)
-            # x.comm.Allgather(loffset, displs)
+            #x_gsqueezed = resplit(x, axis=None)
+            loffset = factories.zeros(1, dtype=types.int64)
+            loffset.__setitem__(0, x.comm.chunk(x.gshape, x.split)[0])
+            displs = factories.zeros(x.comm.size, dtype=types.int64)
+            x.comm.Allgather(loffset, displs)
             # TODO: address uneven distribution of dimensions (Allgatherv). Issue #273, #233
-            # x.comm.Allgatherv(
-            #    x_lsqueezed, x_gsqueezed
-            # )  # works with evenly distributed dimensions only
+            recv_counts, recv_displs, _ = x.comm.counts_displs_shape(x.shape, x.split)
+
+            x.comm.Allgatherv(
+               x_lsqueezed, (x_gsqueezed, recv_counts, recv_displs), recv_axis=x.split
+            )  # works with evenly distributed dimensions only
             return dndarray.DNDarray(
                 x_gsqueezed,
                 out_gshape,

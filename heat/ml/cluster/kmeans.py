@@ -138,7 +138,8 @@ class KMeans:
             else:
                 raise NotImplementedError("Not implemented for other splitting-axes")
 
-            self._cluster_centers = centroids.expand_dims(axis=0)
+            #self._cluster_centers = centroids.expand_dims(axis=0)
+            self._cluster_centers = centroids
 
         # directly passed centroids
         elif isinstance(self.init, ht.DNDarray):
@@ -218,8 +219,10 @@ class KMeans:
             Training instances to cluster.
         """
         # calculate the distance matrix and determine the closest centroid
-        distances = ((X - self._cluster_centers) ** 2).sum(axis=1, keepdim=True)
-        matching_centroids = distances.argmin(axis=2, keepdim=True)
+        distances = ht.zeros((X.shape[0], self.n_clusters))
+        for k in range(self._cluster_centers.shape[2]):
+            distances[:,k] = ((X - self._cluster_centers[:,k]) ** 2).sum(axis=1, keepdim=True)
+        matching_centroids = distances.argmin(axis=1, keepdim=True)
 
         return matching_centroids
 
@@ -241,7 +244,7 @@ class KMeans:
         self._n_iter = 0
         matching_centroids = ht.zeros((X.shape[0]), split=X.split, device=X.device, comm=X.comm)
 
-        X = X.expand_dims(axis=2)
+        #X = X.expand_dims(axis=2)
         new_cluster_centers = self._cluster_centers.copy()
 
         # iteratively fit the points to the centroids

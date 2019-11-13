@@ -22,27 +22,37 @@ class Timing:
 
 def main():
 
-    data = ht.load_hdf5(
-        os.path.join(os.getcwd(), "/home/debusc/src/heat/heat/datasets/data/iris.h5"),
-        "data",
-        split=0,
-    )
-    # data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test284.h5'), 'snapshots', split=0)
-    k = 3
+    k = 15
     kmeans = ht.ml.cluster.KMeans(n_clusters=k, init="kmeans++")
-    centroids = kmeans.fit(data)
-    if data.comm.rank == 0:
-        print("FINAL CENTROIDS CALCULATED ")
-        print(centroids)
+    test = 'test243'
 
-    # Experiment 1: Writing out final Centroids to images
-    # if data.comm.rank == 0:
-    #     np_centroids = centroids._DNDarray__array.numpy().reshape((1024,185, 7 ))
-    #     for i in range(7):
-    #         img = np_centroids[:, :, i]
-    #         file = 'Final_Centroid_'+str(i)+'.png'
-    #         plt.imshow(img)
-    #         plt.savefig(file)
+    #data = ht.load_hdf5(os.path.join(os.getcwd(), "/home/debu_ch/src/heat-Phillip/heat/datasets/data/iris.h5"),"data",split=0)
+    data = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_'+test+'.h5'), 'snapshots', split=0)
+    if(data.comm.rank==0):
+        print("Data Loaded: ", test)
+        start = time.perf_counter()
+    kmeans.fit(data)
+    if data.comm.rank==0:
+        stop = time.perf_counter()
+        print("Number of Iterations: {}".format(kmeans.n_iter_))
+        print("Kmeans clustering duration: {:4.4f}s".format( stop - start))
+    cluster = kmeans.predict(data)
+    centroids = kmeans.cluster_centers_
+
+    np_centroids = centroids.numpy().reshape((k,1024,185 ))
+    #np_centroids = centroids.numpy().reshape((3,2,2 ))
+    np_cluster = cluster._DNDarray__array.numpy()
+    # Experiment 1: Writing
+    # out final Centroids to images
+    if data.comm.rank == 0:
+        np.savetxt('/home/debu_ch/result/results/kmeans/'+test+'_Prediction.csv', np_cluster, delimiter=",")
+
+        for i in range(np_centroids.shape[0]):
+            img = np_centroids[i, :, :]
+            file = '/home/debu_ch/result/results/kmeans/'+test+'_Final_Centroid_'+str(i)+'.png'
+            plt.imshow(img)
+            plt.savefig(file)
+            plt.clf()
 
     # Experiment 2: write out first centroid for each rank
     # np_centroids = centroids._DNDarray__array.numpy().reshape((1024, 185, 7))
