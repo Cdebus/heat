@@ -138,8 +138,7 @@ class KMeans:
             else:
                 raise NotImplementedError("Not implemented for other splitting-axes")
 
-            self._cluster_centers = centroids
-            # self._cluster_centers = centroids.expand_dims(axis=0)
+            self._cluster_centers = centroids.expand_dims(axis=0)
 
         # directly passed centroids
         elif isinstance(self.init, ht.DNDarray):
@@ -149,15 +148,14 @@ class KMeans:
                 )
             if self.init.shape[0] != self.n_clusters or self.init.shape[1] != X.shape[1]:
                 raise ValueError("passed centroids do not match cluster count or data shape")
-            # self._cluster_centers = self.init.resplit(None).T.expand_dims(axis=0)
-            self._cluster_centers = self.init.resplit(None).T
+            self._cluster_centers = self.init.resplit(None).T.expand_dims(axis=0)
 
         # kmeans++, smart centroid guessing
         elif self.init == "kmeans++":
             if (X.split is None) or (X.split == 0):
                 # X = X.expand_dims(axis=2)
                 centroids = ht.empty(
-                    (X.shape[1], self.n_clusters), split=None, device=X.device, comm=X.comm
+                    (1, X.shape[1], self.n_clusters), split=None, device=X.device, comm=X.comm
                 )
                 sample = ht.random.randint(0, X.shape[0] - 1).item()
                 _, displ, _ = X.comm.counts_displs_shape(shape=X.shape, axis=0)
@@ -171,14 +169,14 @@ class KMeans:
                     idx = sample - displ[proc]
                     x0 = ht.array(X.lloc[idx, :], device=X.device, comm=X.comm)
                 x0.comm.Bcast(x0, root=proc)
-                centroids[:, 0] = x0
+                centroids[:, :, 0] = x0
 
                 for i in range(1, self.n_clusters):
                     distances = ht.zeros(
                         (X.shape[0], i), dtype=X.dtype, split=X.split, device=X.device, comm=X.comm
                     )
                     for k in range(i):
-                        distances[:, k] = ((X - centroids[:, k]) ** 2).sum(axis=1, keepdim=False)
+                        distances[:, k] = ((X - centroids[:, :, k]) ** 2).sum(axis=1, keepdim=False)
                     D2 = distances.min(axis=1)
                     D2.resplit_(axis=None)
                     D2 = D2.squeeze()
@@ -201,7 +199,7 @@ class KMeans:
                         idx = sample - displ[proc]
                         xi = ht.array(X.lloc[idx, :], device=X.device, comm=X.comm)
                     xi.comm.Bcast(xi, root=proc)
-                    centroids[:, i] = xi
+                    centroids[:, :, i] = xi
             else:
                 raise NotImplementedError("Not implemented for other splitting-axes")
 
@@ -231,8 +229,8 @@ class KMeans:
             device=X.device,
             comm=X.comm,
         )
-        for k in range(self._cluster_centers.shape[1]):
-            distances[:, k] = ((X - self._cluster_centers[:, k]) ** 2).sum(axis=1, keepdim=False)
+        for k in range(self._cluster_centers.shape[2]):
+            distances[:, k] = ((X - self._cluster_centers[:, :, k]) ** 2).sum(axis=1, keepdim=False)
         matching_centroids = distances.argmin(axis=1, keepdim=True)
 
         return matching_centroids
@@ -277,7 +275,7 @@ class KMeans:
                 )
 
                 # compute the new centroids
-                new_cluster_centers[:, i] = assigned_points / points_in_cluster
+                new_cluster_centers[:, :, i] = assigned_points / points_in_cluster
 
             # check whether centroid movement has converged
             self._inertia = ((self._cluster_centers - new_cluster_centers) ** 2).sum()
@@ -356,7 +354,7 @@ class KMeans:
             raise ValueError("input needs to be a ht.DNDarray, but was {}".format(type(X)))
 
         # determine the centroids
-        return self._fit_to_cluster(X.expand_dims(axis=2)).squeeze()
+        # return self._fit_to_cluster(X.expand_dims(axis=2)).squeeze()
         return self._fit_to_cluster(X).squeeze()
 
     def set_params(self, **params):
