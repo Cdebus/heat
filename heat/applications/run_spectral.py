@@ -1,3 +1,18 @@
+data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/data/snapshot_matrix_' + test + '.h5'), 'snapshots',
+                       split=0)
+if rank == 0:
+    print("Data loaded: ", test)
+    start = time.perf_counter()
+
+# 1. Calculation of Similarity Matrix
+S = similarity(data_ht, metric)
+ht.save_hdf5(S, '/home/debu_ch/result/results/spectral/' + test + '_similarity_Gauss_sig3E4.h5', 'GaussianKernel')
+
+if rank == 0:
+    stop = time.perf_counter()
+    print("Calculation of Similarity Matrix {} (sigma = {}): {:4.4f}s".format(metric.Get_Name(), metric.Get_Sigma(),
+                                                                              stop - start))
+    start = time.perf_counter()
 # # 2. Calculation of Laplacian
 # L = normalized_laplacian_fullyConnected(S)
 # ht.save_hdf5(L, '/home/debu_ch/result/results/Test296/Laplacian_Run1.h5', 'NormalizedFullyConnected')

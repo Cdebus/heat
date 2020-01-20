@@ -5,6 +5,7 @@ import numpy as np
 import math
 import os
 import time
+import matplotlib.pyplot as plt
 
 
 from mpi4py import MPI
@@ -360,7 +361,7 @@ def similarity(X, Metric=EuclidianDistance()):
     S[rows[0]:rows[1], rows[0]:rows[1]] = d_ij
 
     for iter in range(1, num_iter):
-        if(rank == 0): print(" ####### Round {} #######".format(iter))
+        #if(rank == 0): print(" ####### Round {} #######".format(iter))
 
         # Send rank's part of the matrix to the next process in a circular fashion
         receiver = (rank + iter) % size
@@ -457,6 +458,7 @@ def similarity(X, Metric=EuclidianDistance()):
 
 def unnormalized_laplacian_fullyConnected(S):
 
+    rank = S.comm.rank
     degree = ht.sum(S, axis=1)
     D = ht.zeros(S.shape, dtype=ht.int, split = S.split)
 
@@ -473,6 +475,7 @@ def unnormalized_laplacian_fullyConnected(S):
 
 def normalized_laplacian_fullyConnected(S):
 
+    rank = S.comm.rank
     d = ht.sqrt(1./ht.sum(S, axis=1))
     D_ = ht.zeros(S.shape, split = S.split)
 
@@ -489,6 +492,7 @@ def normalized_laplacian_fullyConnected(S):
 
 def unnormalized_laplacian_eNeighbour(S, epsilon):
 
+    rank = S.comm.rank
     A = ht.int(S < epsilon) - ht.eye(S.shape, dtype=ht.int, split=S.split)
     degree = ht.sum(A, axis=1)
     D = ht.zeros(A.shape, dtype=ht.int, split = A.split)
@@ -505,6 +509,7 @@ def unnormalized_laplacian_eNeighbour(S, epsilon):
 
 def normalized_laplacian_eNeighbour(S,epsilon):
 
+    rank = S.comm.rank
     A = ht.int(S < epsilon) - ht.eye(S.shape, dtype=ht.int, split=S.split)
 
     d = ht.sqrt(1./ht.sum(A, axis=1))
@@ -611,112 +616,183 @@ def conjgrad_heat(A, b, x):
 
     return x
 
-def test_Sending():
-    stat = MPI.Status()
-    print("Rank {} up and Running".format(rank))
+# def test_Sending():
+#     stat = MPI.Status()
+#     print("Rank {} up and Running".format(rank))
+#
+#     #data_ht = ht.load_hdf5(os.path.join(os.getcwd(), 'heat/datasets/data/iris.h5'), 'data', split=0)
+#
+#     n = 300
+#     limit = 2000000
+#     data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test289.h5'), 'snapshots')
+#     sample = data_ht[:n, :]
+#
+#     k, f = sample.shape
+#
+#     if rank == 0:
+#         print("data loaded")
+#
+#
+#     start = time.perf_counter()
+#     if rank == 0:
+#         num_send = sample.shape[0] * sample.shape[1]
+#
+#         comm.Send(torch.tensor(num_send), dest=1, tag=999)
+#         print("Attempting to send {} slices, with total number of entries = {}".format(n, num_send))
+#
+#         if num_send > limit:
+#             num_chunks = math.ceil(num_send/limit)
+#             cnt = np.full((num_chunks,), n // num_chunks)
+#             cnt[:n % num_chunks] += 1
+#             dsp = np.zeros((num_chunks,), dtype=cnt.dtype)
+#             np.cumsum(cnt[:-1], out=dsp[1:])
+#             print("Send data too big, will be send in {} chunks consisting {} entries at positions {} ".format(num_chunks, cnt, dsp))
+#
+#
+#
+#             for chunk in range(num_chunks):
+#                 s1 = dsp[chunk]
+#                 if chunk != (num_chunks-1):
+#                     s2 = dsp[chunk+1]
+#                 else:
+#                     s2 = n
+#                 sendbuf = sample[s1:s2, :].copy()
+#                 print("Sending chunk {}, slices {}:{}".format(chunk, s1, s2))
+#                 comm.Send(sendbuf, dest=1, tag=chunk)
+#
+#         else:
+#             comm.Ssend(sample, dest=1, tag=n)
+#
+#     else:
+#         moving = torch.zeros((n, f), dtype=torch.float32)
+#
+#         num_recv = torch.tensor(0)
+#         comm.Recv(num_recv, source=0, tag=999)
+#         num_recv = num_recv.item()
+#         print("Attempting to Receive {} slices, with total number of entries = {}".format(n, num_recv))
+#
+#         if num_recv > limit :
+#             num_chunks = math.ceil(num_recv/limit)
+#
+#             cnt = np.full((num_chunks,), n // num_chunks)
+#             cnt[:n % num_chunks] += 1
+#             dsp = np.zeros((num_chunks,), dtype=cnt.dtype)
+#             np.cumsum(cnt[:-1], out=dsp[1:])
+#             print(" Data too big, will be received in {} chunks consisting {} entries at positions {} ".format(num_chunks, cnt, dsp))
+#
+#
+#             for chunk in range(num_chunks):
+#                 s1 = dsp[chunk]
+#                 if chunk != (num_chunks-1):
+#                     s2 = dsp[chunk+1]
+#                 else:
+#                     s2 = n
+#
+#                 temp_buf = torch.zeros((s2-s1, f), dtype=torch.float32)
+#                 print("Receiving chunk {}, slices {}:{}".format(chunk, s1, s2))
+#                 comm.Recv(temp_buf, source=0, tag=chunk)
+#                 moving[s1:s2, :] = temp_buf
+#
+#
+#         else:
+#             comm.Recv(moving, source=0, tag=n)
+#
+#
+#         stop = time.perf_counter()
+#         print("Process {} received data of size {}  after  {}s".format(rank, moving.shape, stop - start))
 
-    #data_ht = ht.load_hdf5(os.path.join(os.getcwd(), 'heat/datasets/data/iris.h5'), 'data', split=0)
+def run_spectral(X,sig, m):
 
-    n = 300
-    limit = 2000000
-    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/src/heat-Phillip/heat/datasets/data/snapshot_matrix_test289.h5'), 'snapshots')
-    sample = data_ht[:n, :]
-
-    k, f = sample.shape
+    rank = X.comm.rank
+    metric=GaussianDistance(sigma=sig)
 
     if rank == 0:
-        print("data loaded")
+        start = time.perf_counter()
 
-
-    start = time.perf_counter()
+    S = similarity(X, metric)
     if rank == 0:
-        num_send = sample.shape[0] * sample.shape[1]
-
-        comm.Send(torch.tensor(num_send), dest=1, tag=999)
-        print("Attempting to send {} slices, with total number of entries = {}".format(n, num_send))
-
-        if num_send > limit:
-            num_chunks = math.ceil(num_send/limit)
-            cnt = np.full((num_chunks,), n // num_chunks)
-            cnt[:n % num_chunks] += 1
-            dsp = np.zeros((num_chunks,), dtype=cnt.dtype)
-            np.cumsum(cnt[:-1], out=dsp[1:])
-            print("Send data too big, will be send in {} chunks consisting {} entries at positions {} ".format(num_chunks, cnt, dsp))
-
-
-
-            for chunk in range(num_chunks):
-                s1 = dsp[chunk]
-                if chunk != (num_chunks-1):
-                    s2 = dsp[chunk+1]
-                else:
-                    s2 = n
-                sendbuf = sample[s1:s2, :].copy()
-                print("Sending chunk {}, slices {}:{}".format(chunk, s1, s2))
-                comm.Send(sendbuf, dest=1, tag=chunk)
-
-        else:
-            comm.Ssend(sample, dest=1, tag=n)
-
-    else:
-        moving = torch.zeros((n, f), dtype=torch.float32)
-
-        num_recv = torch.tensor(0)
-        comm.Recv(num_recv, source=0, tag=999)
-        num_recv = num_recv.item()
-        print("Attempting to Receive {} slices, with total number of entries = {}".format(n, num_recv))
-
-        if num_recv > limit :
-            num_chunks = math.ceil(num_recv/limit)
-
-            cnt = np.full((num_chunks,), n // num_chunks)
-            cnt[:n % num_chunks] += 1
-            dsp = np.zeros((num_chunks,), dtype=cnt.dtype)
-            np.cumsum(cnt[:-1], out=dsp[1:])
-            print(" Data too big, will be received in {} chunks consisting {} entries at positions {} ".format(num_chunks, cnt, dsp))
-
-
-            for chunk in range(num_chunks):
-                s1 = dsp[chunk]
-                if chunk != (num_chunks-1):
-                    s2 = dsp[chunk+1]
-                else:
-                    s2 = n
-
-                temp_buf = torch.zeros((s2-s1, f), dtype=torch.float32)
-                print("Receiving chunk {}, slices {}:{}".format(chunk, s1, s2))
-                comm.Recv(temp_buf, source=0, tag=chunk)
-                moving[s1:s2, :] = temp_buf
-
-
-        else:
-            comm.Recv(moving, source=0, tag=n)
-
-
         stop = time.perf_counter()
-        print("Process {} received data of size {}  after  {}s".format(rank, moving.shape, stop - start))
+        print(" * Calculation of Similarity Matrix (Gaussian Kernel, sigma = {}): {:4.4f}s".format(sig, stop - start))
+        start = time.perf_counter()
+    # 2. Calculation of Laplacian
+    L = normalized_laplacian_fullyConnected(S)
+    if rank == 0:
+        stop = time.perf_counter()
+        print(" * Calculation of normalized fully connected Laplacian: {:4.4f}s".format(stop - start))
+        start = time.perf_counter()
+
+    # 3. Eigenvalue and -vector Calculation
+    vr = ht.random.rand(L.shape[0], split=L.split, dtype=ht.float64)
+    v0 = vr/ht_norm(vr)
+    Vg_norm, Tg_norm = lanczos_ht(L, m, v0)
+    #ht.save_hdf5(Vg_norm, '/home/debu_ch/result/results/spectral/Exp2_2/newSigma/' + name + '_V_nfc_sig{}_m{}.h5'.format(m,sig), 'Vg_norm')
+    #ht.save_hdf5(Tg_norm, '/home/debu_ch/result/results/spectral/Exp2_2/newSigma/' + name + '_T_nfc_sig{}_m{}.h5'.format(m,sig), 'Tg_norm')
+
+    if rank == 0:
+       stop = time.perf_counter()
+       print(" * Calculation of {} Lanczos iterations : {:4.4f}s".format(m, stop - start))
+       start = time.perf_counter()
+
+    # 4. Calculate and Sort Eigenvalues and Eigenvectors of tridiagonal matrix T
+    eval, evec = torch.eig(Tg_norm._DNDarray__array, eigenvectors=True)
+    # If x is an Eigenvector of T, then y = V@x is the corresponding Eigenvector of L
+    ev = ht.matmul(Vg_norm, ht.factories.array(evec))
+    eval_sorted, indices = torch.sort(eval[:, 0], dim=0)
+    evec_sorted = ev[:,indices]
+
+    if rank == 0:
+        stop = time.perf_counter()
+        print(" * Calculation of eigenvectors and eigenvalues : {:4.4f}s".format( stop - start))
+
+    # 6. cluster Eigenvectors
+    #v_star = ev[:,:k].copy()
+    #if rank == 0: print(eval_sorted[:k],v_star)
+    #kmeans = ht.ml.cluster.KMeans(n_clusters=k)
+    #centroids = kmeans.fit(v_star)
+    #v_star = v_star.expand_dims(axis=2)
+    #distances = ((v_star - centroids) ** 2).sum(axis=1, keepdim=True)
+    #matching_centroids = distances.argmin(axis=2, keepdim=True).numpy()
+    #tmp = matching_centroids[:, 0, 0]
+
+    return S, eval_sorted, evec_sorted
+
 
 
 if __name__ == "__main__":
-    ############################ Initialization ############################
-    comm = ht.MPICommunication(MPI.COMM_WORLD)
-    rank = comm.Get_rank()
 
-    test = 'test284'
-    #metric = GaussianDistance(sigma=1E5)
-    metric = EuclidianDistance()
+    m = 500
+    sigma = 4000
+    k = 7
+    name = 'test296'
 
-    data_ht = ht.load_hdf5(os.path.join(os.getcwd(), '/home/debu_ch/data/snapshot_matrix_'+test+'.h5'),'snapshots', split=0)
-    if rank == 0:
-        print("Data loaded: ", test)
+    # X = ht.load_hdf5('/home/debu_ch/data/snapshot_matrix_' + name + '.h5', 'snapshots', split=0)
+    # if(X.comm.rank == 0):
+    #     print("Data Loaded: ", name)
+    # S, eval_sorted, evec_sorted = run_spectral(X, sigma , m)
+    #
+    # ht.save_hdf5(S, '/home/debu_ch/result/results/spectral/Exp2_2/newSigma/' + name + '_GaussSim_sig{}.h5'.format(int(sigma)), 'GaussianKernel')
+    # ht.save_hdf5(evec_sorted, '/home/debu_ch/result/results/spectral/Exp2_2/newSigma/'+ name + '_EVec_nfc_sig{}_m{}.h5'.format(int(sigma), m), 'Evec')
+    # if X.comm.rank == 0:
+    #     np.savetxt('/home/debu_ch/result/results/spectral/Exp2_2/newSigma/' + name + '_EVal_nfc_sig{}_m{}.csv'.format(int(sigma), m), eval_sorted.numpy(), delimiter=",")
+
+    X = ht.load_hdf5('/home/debu_ch/result/results/spectral/Final/'+ name + '_EVec_nfc_sig{}_m{}.h5'.format(int(sigma), m), 'Evec')
+
+    ev = X[:29000,:7].copy()
+    ev.resplit_(axis=0)
+    kmeans = ht.ml.cluster.KMeans(n_clusters=k, init="kmeans++")
+    if (ev.comm.rank == 0):
         start = time.perf_counter()
-
-    # 1. Calculation of Similarity Matrix
-    S = similarity(data_ht, metric)
-    ht.save_hdf5(S, '/home/debu_ch/result/results/spectral/'+test+'_similarity_Euklid.h5', 'EuklidianDistance')
-
-    if rank == 0:
+    kmeans.fit(ev)
+    if ev.comm.rank == 0:
         stop = time.perf_counter()
-        print("Calculation of Similarity Matrix {} : {:4.4f}s".format(metric.Get_Name(),  stop - start))
-        start = time.perf_counter()
+        print("Number of Iterations: {}".format(kmeans.n_iter_))
+        print("Kmeans clustering duration: {:4.4f}s".format(stop - start))
+    cluster = kmeans.predict(ev)
+    centroids = kmeans.cluster_centers_
+
+
+
+    np_cluster = cluster._DNDarray__array.numpy()
+    if ev.comm.rank == 0:
+        np.savetxt('/home/debu_ch/result/results/spectral/Cluster/'+name+'_Prediction_Spectral_Cut.csv', np_cluster, delimiter=",")
 
